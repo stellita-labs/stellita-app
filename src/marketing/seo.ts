@@ -32,11 +32,13 @@ export function useMarketingSeo({
   description,
   path,
   indexable = true,
+  noindex = false,
 }: {
   title: string
   description?: string
   path: string
   indexable?: boolean
+  noindex?: boolean
 }) {
   useEffect(() => {
     const url = `${SITE}${path}`
@@ -50,6 +52,7 @@ export function useMarketingSeo({
     if (description) setMeta('name', 'description', description)
     setCanonical(url)
     setMeta('name', 'robots', indexable ? 'index, follow' : 'noindex, follow')
+    setMeta('name', 'robots', noindex ? 'noindex, follow' : 'index, follow')
 
     setMeta('property', 'og:type', 'website')
     setMeta('property', 'og:site_name', 'Stellita')
@@ -69,4 +72,8 @@ export function useMarketingSeo({
       setCanonical(prevCanonical)
     }
   }, [title, description, path, indexable])
+      setMeta('name', 'robots', 'index, follow')
+      setCanonical(`${SITE}/`)
+    }
+  }, [title, description, path, noindex])
 }
