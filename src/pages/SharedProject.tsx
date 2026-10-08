@@ -12,6 +12,7 @@ import type { Version } from '../projects/store'
 import { fetchShared } from '../lib/backend'
 import { useFreighterBridge } from '../wallet/freighterBridge'
 import { Logo, Wordmark } from '../marketing/shared'
+import { useMarketingSeo } from '../marketing/seo'
 import type { ChatMessage, DeployedContract, FileTree } from '../../shared/types'
 
 type Loaded = {
@@ -40,6 +41,14 @@ export function SharedProject() {
   const [resizing, setResizing] = useState(false)
   const [params] = useSearchParams()
   const autoCloned = useRef(false)
+
+  useMarketingSeo({
+    title: data?.name ? `${data.name} — Stellita` : 'Shared Project — Stellita',
+    description: 'Public read-only view of a Stellita Soroban project.',
+    path: token ? `/p/${token}` : '/p',
+    noindex: true,
+  })
+
   // Answer Freighter requests forwarded from the preview iframe — same bridge the
   // authed shell uses, so wallet connect works on the shared page too.
   useFreighterBridge()

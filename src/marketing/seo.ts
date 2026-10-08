@@ -32,16 +32,19 @@ export function useMarketingSeo({
   title,
   description,
   path,
+  noindex = false,
 }: {
   title: string
   description: string
   path: string
+  noindex?: boolean
 }) {
   useEffect(() => {
     const url = `${SITE}${path}`
     document.title = title
     setMeta('name', 'description', description)
     setCanonical(url)
+    setMeta('name', 'robots', noindex ? 'noindex, follow' : 'index, follow')
 
     setMeta('property', 'og:type', 'website')
     setMeta('property', 'og:site_name', 'Stellita')
@@ -54,5 +57,10 @@ export function useMarketingSeo({
     setMeta('name', 'twitter:title', title)
     setMeta('name', 'twitter:description', description)
     setMeta('name', 'twitter:image', OG_IMAGE)
-  }, [title, description, path])
+
+    return () => {
+      setMeta('name', 'robots', 'index, follow')
+      setCanonical(`${SITE}/`)
+    }
+  }, [title, description, path, noindex])
 }
