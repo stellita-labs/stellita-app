@@ -699,6 +699,11 @@ export default function App() {
 
   const sym = meta?.symbol ?? 'DEMO'
   const flash = (t: Toast) => { setToast(t); if (t) setTimeout(() => setToast(null), 4000) }
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
+    flash({ kind: 'err', text })
+  }
 
   const loadMeta = useCallback(async () => {
     try {
@@ -710,12 +715,12 @@ export default function App() {
       ])
       setMeta({ name, symbol, supply: String(supply) })
       setDecimals(Number(dec))
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadBalance = useCallback(async (a: string) => {
     try { setBalance(String(await readContract(TOKEN_ID, 'balance', VIEW_SOURCE, [addr(a)]))) }
-    catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadActivity = useCallback(async (a: string) => {
@@ -741,7 +746,7 @@ export default function App() {
   const connect = async () => {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await refresh(a) }
-    catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -759,7 +764,7 @@ export default function App() {
       prepend({ kind: 'mint', counterparty: '', amount: '1000', time: new Date().toISOString(), txHash: hash })
       flash({ kind: 'ok', text: 'Claimed 1,000 ' + sym + ' 🎉' })
       refresh(address)
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -773,7 +778,7 @@ export default function App() {
       setTo('')
       flash({ kind: 'ok', text: 'Sent ' + fmt(amount) + ' ' + sym + ' · ' + short(hash) })
       refresh(address)
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1060,6 +1065,11 @@ export default function App() {
   const [toast, setToast] = useState<Toast>(null)
 
   const flash = (t: Toast) => { setToast(t); if (t) setTimeout(() => setToast(null), 4000) }
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
+    flash({ kind: 'err', text })
+  }
 
   const loadMeta = useCallback(async () => {
     try {
@@ -1068,7 +1078,7 @@ export default function App() {
         readContract(NFT_ID, 'symbol', VIEW_SOURCE),
       ])
       setMeta({ name: String(name), symbol: String(symbol) })
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadOwned = useCallback(async (a: string) => {
@@ -1089,7 +1099,7 @@ export default function App() {
   const connect = async () => {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await loadOwned(a) }
-    catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1103,7 +1113,7 @@ export default function App() {
       if (tokenId != null) setOwned((o) => [...new Set([...o, tokenId])].sort((x, y) => x - y))
       await loadOwned(address)
       flash({ kind: 'ok', text: tokenId != null ? 'Minted NFT #' + tokenId + ' 🎨' : 'Minted! 🎨' })
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1527,6 +1537,11 @@ export default function App() {
   const recvBal = dir === 'XLM_USDC' ? usdcBal : xlmBal
 
   const flash = (t: Toast) => { setToast(t); if (t) setTimeout(() => setToast(null), 4500) }
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
+    flash({ kind: 'err', text })
+  }
 
   const loadBalances = useCallback(async (a: string) => {
     try {
@@ -1536,7 +1551,7 @@ export default function App() {
       ])
       setXlmBal(Number(BigInt(x)) / 10 ** DEC)
       setUsdcBal(Number(BigInt(u)) / 10 ** DEC)
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   useEffect(() => {
@@ -1566,7 +1581,7 @@ export default function App() {
   const connect = async () => {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await loadBalances(a) }
-    catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1584,7 +1599,7 @@ export default function App() {
       await fundWithFriendbot(address)
       flash({ kind: 'ok', text: 'Requested 10,000 test XLM 🚀' })
       setTimeout(() => loadBalances(address), 2500)
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1610,7 +1625,7 @@ export default function App() {
       const recvAmt = fmt(Number(out) / 10 ** DEC)
       flash({ kind: 'ok', text: 'Swapped ' + fmt(amount) + ' ' + pay.sym + ' → ' + recvAmt + ' ' + recv.sym + ' · ' + short(hash) })
       await loadBalances(address)
-    } catch (e: any) { flash({ kind: 'err', text: e.message }) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
