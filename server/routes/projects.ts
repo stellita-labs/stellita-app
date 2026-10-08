@@ -4,6 +4,7 @@ import { requireUser } from '../middleware/auth.js'
 import { adminClient } from '../lib/supabase.js'
 import { sendEmail } from '../lib/email.js'
 import { shareInviteEmail } from '../emails/templates.js'
+import { errorResponse } from '../_lib/errors.js'
 
 const router = Router()
 
@@ -79,7 +80,10 @@ router.get('/projects', requireUser, async (req, res) => {
     .eq('is_template', false)
     .order('updated_at', { ascending: false })
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to fetch projects', error, { route: 'GET /api/projects' })
+    return
+  }
   res.json(data)
 })
 
@@ -95,7 +99,10 @@ router.get('/templates', async (_req, res) => {
     .eq('published', true)
     .order('sort_order', { ascending: true })
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to fetch templates', error, { route: 'GET /api/templates' })
+    return
+  }
   // Flatten the share token so badges can link straight to /p/:token.
   const out = (data ?? []).map((p: Record<string, unknown>) => ({
     id: p['id'],
@@ -145,7 +152,10 @@ router.post('/projects', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to create project', error, { route: 'POST /api/projects' })
+    return
+  }
   res.status(201).json(data)
 })
 
@@ -179,7 +189,9 @@ router.get('/projects/:id', requireUser, async (req, res) => {
   ])
 
   if (projectRes.error) {
-    res.status(projectRes.error.code === 'PGRST116' ? 404 : 500).json({ error: projectRes.error.message })
+    const status = projectRes.error.code === 'PGRST116' ? 404 : 500
+    const msg = status === 404 ? 'Project not found' : 'Failed to fetch project'
+    errorResponse(res, status, msg, projectRes.error, { route: 'GET /api/projects/:id', projectId: id })
     return
   }
 
@@ -206,7 +218,10 @@ router.patch('/projects/:id', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to update project', error, { route: 'PATCH /api/projects/:id', projectId: id })
+    return
+  }
   res.json(data)
 })
 
@@ -214,7 +229,10 @@ router.patch('/projects/:id', requireUser, async (req, res) => {
 router.delete('/projects/:id', requireUser, async (req, res) => {
   const { id } = req.params
   const { error } = await req.supabase.from('projects').delete().eq('id', id)
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to delete project', error, { route: 'DELETE /api/projects/:id', projectId: id })
+    return
+  }
   res.json({ ok: true })
 })
 
@@ -231,7 +249,10 @@ router.patch('/projects/:id/files', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to update project files', error, { route: 'PATCH /api/projects/:id/files', projectId: id })
+    return
+  }
   res.json(data)
 })
 
@@ -266,7 +287,10 @@ router.post('/projects/:id/versions', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to create project version', error, { route: 'POST /api/projects/:id/versions', projectId: id })
+    return
+  }
   res.status(201).json(data)
 })
 
@@ -279,7 +303,10 @@ router.post('/projects/:id/versions/:vid/restore', requireUser, async (req, res)
     p_version: vid,
   })
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to restore version', error, { route: 'POST /api/projects/:id/versions/:vid/restore', projectId: id, versionId: vid })
+    return
+  }
 
   // Return the refreshed project
   const { data: project, error: fetchErr } = await req.supabase
@@ -288,7 +315,10 @@ router.post('/projects/:id/versions/:vid/restore', requireUser, async (req, res)
     .eq('id', id)
     .single()
 
-  if (fetchErr) { res.status(500).json({ error: fetchErr.message }); return }
+  if (fetchErr) {
+    errorResponse(res, 500, 'Failed to fetch refreshed project', fetchErr, { route: 'POST /api/projects/:id/versions/:vid/restore', projectId: id, versionId: vid })
+    return
+  }
   res.json(project)
 })
 
@@ -360,13 +390,16 @@ router.post('/projects/:id/messages', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to save message', error, { route: 'POST /api/projects/:id/messages', projectId: id })
+    return
+  }
   res.status(201).json(data)
 })
 
 /** PATCH /api/projects/:id/messages/:mid — update actions_done */
 router.patch('/projects/:id/messages/:mid', requireUser, async (req, res) => {
-  const { mid } = req.params
+  const { id, mid } = req.params
   const { actions_done } = req.body as { actions_done?: boolean }
 
   const { data, error } = await req.supabase
@@ -376,7 +409,10 @@ router.patch('/projects/:id/messages/:mid', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to update message', error, { route: 'PATCH /api/projects/:id/messages/:mid', projectId: id, messageId: mid })
+    return
+  }
   res.json(data)
 })
 
@@ -430,7 +466,10 @@ router.post('/projects/:id/contracts', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to record contract deployment', error, { route: 'POST /api/projects/:id/contracts', projectId: id })
+    return
+  }
   res.status(201).json(data)
 })
 
@@ -446,12 +485,15 @@ router.post('/projects/:id/share', requireUser, async (req, res) => {
     .from('projects')
     .update({ visibility: 'link' })
     .eq('id', id)
-  if (visErr) { res.status(500).json({ error: visErr.message }); return }
+  if (visErr) {
+    errorResponse(res, 500, 'Failed to update project visibility', visErr, { route: 'POST /api/projects/:id/share', projectId: id })
+    return
+  }
   try {
     const token = await ensureShareToken(req.supabase, id as string, req.user.id)
     res.json({ token, url: `${FRONTEND_ORIGIN}/p/${token}` })
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'share failed' })
+    errorResponse(res, 500, 'Failed to generate share link', e, { route: 'POST /api/projects/:id/share', projectId: id })
   }
 })
 
@@ -470,7 +512,10 @@ router.post('/projects/:id/visibility', requireUser, async (req, res) => {
     .from('projects')
     .update({ visibility })
     .eq('id', id)
-  if (upErr) { res.status(500).json({ error: upErr.message }); return }
+  if (upErr) {
+    errorResponse(res, 500, 'Failed to update project visibility', upErr, { route: 'POST /api/projects/:id/visibility', projectId: id })
+    return
+  }
 
   try {
     let token: string | null
@@ -491,7 +536,7 @@ router.post('/projects/:id/visibility', requireUser, async (req, res) => {
       url: visibility === 'link' && token ? `${FRONTEND_ORIGIN}/p/${token}` : null,
     })
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'visibility failed' })
+    errorResponse(res, 500, 'Failed to update visibility token', e, { route: 'POST /api/projects/:id/visibility', projectId: id })
   }
 })
 
@@ -514,13 +559,16 @@ router.post('/projects/:id/share/email', requireUser, async (req, res) => {
     .from('projects')
     .update({ visibility: 'link' })
     .eq('id', id)
-  if (visErr) { res.status(500).json({ error: visErr.message }); return }
+  if (visErr) {
+    errorResponse(res, 500, 'Failed to update project visibility for share invite', visErr, { route: 'POST /api/projects/:id/share/email', projectId: id })
+    return
+  }
 
   let token: string
   try {
     token = await ensureShareToken(req.supabase, id as string, req.user.id)
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'share failed' })
+    errorResponse(res, 500, 'Failed to generate share link for email', e, { route: 'POST /api/projects/:id/share/email', projectId: id })
     return
   }
 
@@ -542,14 +590,20 @@ router.post('/projects/:id/clone', requireUser, async (req, res) => {
   const { data: newId, error } = await req.supabase.rpc('clone_project', {
     p_source: id,
   })
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to clone project', error, { route: 'POST /api/projects/:id/clone', projectId: id })
+    return
+  }
 
   const { data: proj, error: fetchErr } = await req.supabase
     .from('projects')
     .select('id,slug,name')
     .eq('id', newId)
     .single()
-  if (fetchErr) { res.status(500).json({ error: fetchErr.message }); return }
+  if (fetchErr) {
+    errorResponse(res, 500, 'Failed to fetch cloned project', fetchErr, { route: 'POST /api/projects/:id/clone', projectId: id, newId })
+    return
+  }
   res.json(proj)
 })
 
@@ -634,14 +688,20 @@ router.post('/shared/:token/clone', requireUser, async (req, res) => {
     p_share_token: token,
   })
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to clone shared project', error, { route: 'POST /api/shared/:token/clone', token })
+    return
+  }
 
   const { data: proj, error: fetchErr } = await req.supabase
     .from('projects')
     .select('id,slug,name')
     .eq('id', newId)
     .single()
-  if (fetchErr) { res.status(500).json({ error: fetchErr.message }); return }
+  if (fetchErr) {
+    errorResponse(res, 500, 'Failed to fetch cloned shared project', fetchErr, { route: 'POST /api/shared/:token/clone', token, newId })
+    return
+  }
   res.json(proj)
 })
 

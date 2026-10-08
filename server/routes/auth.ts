@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { User } from '@supabase/supabase-js'
 import { serverClient } from '../lib/supabase.js'
 import { requireUser } from '../middleware/auth.js'
+import { errorResponse } from '../_lib/errors.js'
 
 const router = Router()
 
@@ -48,7 +49,7 @@ router.post('/otp/start', async (req, res) => {
     options: { shouldCreateUser: true },
   })
   if (error) {
-    res.status(400).json({ error: error.message })
+    errorResponse(res, 400, 'Unable to send login email', error, { route: 'POST /auth/otp/start' })
     return
   }
   res.json({ ok: true })
@@ -71,7 +72,7 @@ router.post('/otp/verify', async (req, res) => {
     type: 'email',
   })
   if (error) {
-    res.status(400).json({ error: error.message })
+    errorResponse(res, 400, 'Invalid or expired login code', error, { route: 'POST /auth/otp/verify' })
     return
   }
   res.json({ user: data.user ? publicUser(data.user) : null })
@@ -107,7 +108,7 @@ router.get('/google', async (req, res) => {
     options: { redirectTo: `${API_BASE}/auth/callback` },
   })
   if (error || !data.url) {
-    res.status(500).json({ error: error?.message ?? 'OAuth error' })
+    errorResponse(res, 500, 'OAuth initiation failed', error, { route: 'GET /auth/google' })
     return
   }
   res.redirect(data.url)
@@ -131,7 +132,7 @@ router.get('/callback', async (req, res) => {
   const supabase = serverClient(req, res)
   const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) {
-    res.status(400).json({ error: error.message })
+    errorResponse(res, 400, 'Authentication callback failed', error, { route: 'GET /auth/callback' })
     return
   }
   res.redirect(`${FRONTEND_ORIGIN}${next}`)
@@ -159,7 +160,7 @@ router.get('/me', requireUser, async (req, res) => {
   ])
 
   if (profileRes.error) {
-    res.status(500).json({ error: profileRes.error.message })
+    errorResponse(res, 500, 'Failed to fetch user profile', profileRes.error, { route: 'GET /auth/me' })
     return
   }
   res.json({
@@ -176,7 +177,7 @@ router.get('/me', requireUser, async (req, res) => {
 router.get('/usage', requireUser, async (req, res) => {
   const { data, error } = await req.supabase.rpc('usage_daily', { p_days: 30 })
   if (error) {
-    res.status(500).json({ error: error.message })
+    errorResponse(res, 500, 'Failed to fetch usage history', error, { route: 'GET /auth/usage' })
     return
   }
   res.json({ days: data ?? [] })

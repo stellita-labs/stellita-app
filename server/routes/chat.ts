@@ -4,6 +4,7 @@ import { adminClient } from '../lib/supabase.js'
 import { streamChat } from '../_lib/llm.js'
 import { checkGuardrail, refusalMessage } from '../_lib/guardrail.js'
 import { listManifests } from '../_lib/contracts.js'
+import { errorResponse } from '../_lib/errors.js'
 import type { FileTree, ChatMessage } from '../../shared/types.js'
 import { PROMPT_MAX } from '../../shared/types.js'
 
@@ -44,7 +45,7 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     p_user: req.user.id,
   })
   if (rpcErr) {
-    res.status(500).json({ error: rpcErr.message })
+    errorResponse(res, 500, 'Failed to verify account prompt quota', rpcErr, { route: 'POST /api/projects/:id/chat' })
     return
   }
   if (allowed === false) {

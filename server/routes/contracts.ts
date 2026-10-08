@@ -4,6 +4,7 @@ import { listManifests, getManifest } from '../_lib/contracts.js'
 import { deployContract } from '../_lib/deploy.js'
 import { mintDemoTokens, DEMO_TOKEN_ID } from '../_lib/faucet.js'
 import { mintNft, DEMO_NFT_ID } from '../_lib/nft.js'
+import { errorResponse } from '../_lib/errors.js'
 
 const router = Router()
 
@@ -63,7 +64,13 @@ router.post('/projects/:id/deploy', requireUser, async (req, res) => {
     .select()
     .single()
 
-  if (error) { res.status(500).json({ error: error.message }); return }
+  if (error) {
+    errorResponse(res, 500, 'Failed to save deployed contract record', error, {
+      route: 'POST /api/projects/:id/deploy',
+      projectId: id,
+    })
+    return
+  }
   res.json({ ...result, record: data })
 })
 
