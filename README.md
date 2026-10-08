@@ -96,6 +96,21 @@ owner's secret here.
 | `pnpm typecheck` | App + API + server type-check |
 | `pnpm lint` | ESLint |
 
+## Quality gate
+
+Before opening a pull request, all three checks must pass (`pnpm typecheck && pnpm lint && pnpm build`):
+
+- **`pnpm typecheck`** (`tsc -b && tsc -p server/tsconfig.json --noEmit`) ? Type-checks the frontend/shared TypeScript project references (`tsconfig.app.json`, `tsconfig.node.json`) and the Express backend (`server/tsconfig.json`) without emitting files.
+- **`pnpm lint`** (`eslint .`) ? Runs ESLint across the repository.
+- **`pnpm build`** (`tsc -b && vite build`) ? Type-checks the app references and bundles the production SPA into `dist/`.
+
+No automated test suite exists yet (`package.json` defines no `test` script); verification relies on `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
+
+## Build and deploy
+
+- **Frontend (`Dockerfile.web`)** ? Runs `pnpm install --frozen-lockfile` and `pnpm build` (`tsc -b && vite build`), producing static assets in `dist/`, then copies `/app/dist` into `/usr/share/nginx/html` in an `nginx:alpine` image (`nginx.web.conf`). `VITE_API_BASE` is baked into the client bundle at build time.
+- **Backend (`Dockerfile`)** ? Installs dependencies with `pnpm install --frozen-lockfile` (including `devDependencies`) and runs the Express server directly from TypeScript source at runtime via `pnpm start` (`tsx server/index.ts`) on port `8787` rather than compiling `server/` to a separate JavaScript build artefact.
+
 ## Project layout
 
 ```
