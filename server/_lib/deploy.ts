@@ -88,6 +88,38 @@ export interface DeployInput {
   deployerSecret?: string
 }
 
+/**
+ * Resolve the deployed contract id from a create-contract result.
+ *
+ * A transaction can report success yet carry no usable return value — e.g. the
+ * `__constructor` signature does not match the manifest's `init.argsFromConfig`.
+ * Surface that as an actionable error naming the manifest, the transaction hash
+ * and the explorer URL instead of a bare `TypeError`.
+ */
+export function contractIdFromReturnValue(
+  returnValue: xdr.ScVal | undefined,
+  opts: { manifestId: string; txHash: string },
+): string {
+  const txExplorerUrl = `https://stellar.expert/explorer/testnet/tx/${opts.txHash}`
+  const hint =
+    `The __constructor signature may not match init.argsFromConfig in ` +
+    `contracts/manifests/${opts.manifestId}.json.`
+  if (!returnValue) {
+    throw new Error(
+      `Deploy of manifest "${opts.manifestId}" returned no contract address ` +
+        `(tx ${opts.txHash}, ${txExplorerUrl}). ${hint}`,
+    )
+  }
+  try {
+    return Address.fromScAddress(returnValue.address()).toString()
+  } catch {
+    throw new Error(
+      `Deploy of manifest "${opts.manifestId}" returned a non-address value ` +
+        `(tx ${opts.txHash}, ${txExplorerUrl}). ${hint}`,
+    )
+  }
+}
+
 export async function deployContract({
   manifest,
   config,
@@ -178,9 +210,10 @@ export async function deployContract({
       .build(),
   )
 
-  const contractId = Address.fromScAddress(
-    result.response.returnValue!.address(),
-  ).toString()
+  const contractId = contractIdFromReturnValue(result.response.returnValue, {
+    manifestId: manifest.id,
+    txHash: result.hash,
+  })
 
   return {
     contractId,
