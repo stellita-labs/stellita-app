@@ -1,5 +1,7 @@
 @import 'tailwindcss';
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap');
+
+/* Fonts: Poppins, JetBrains Mono and Press Start 2P are loaded via Google Fonts CDN
+   with preconnect hints in index.html to avoid render-blocking cross-origin @import */
 
 /* Stellita aesthetic: neobrutalist pixel-art. Cream canvas, #222 ink, #FFD700
    accent, hard offset shadows, 2–2.5px borders. Poppins is the default UI
