@@ -13,11 +13,12 @@
     "build": "tsc -b && vite build",
     "check:bundle": "tsx scripts/check-bundle.ts",
     "check:env": "tsx scripts/check-env-example.ts",
+    "check:forbidden-patterns": "tsx scripts/check-forbidden-patterns.ts",
     "typecheck": "tsc -b && tsc -p server/tsconfig.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/consume-prompt-ownership.test.ts",
-    "test": "tsx --test tests/profile-credit-counters.test.ts tests/consume-prompt-ownership.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts server/_lib/deploy.test.ts"
+    "test": "tsx --test tests/profile-credit-counters.test.ts tests/consume-prompt-ownership.test.ts tests/forbidden-patterns.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts server/_lib/deploy.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.1",
