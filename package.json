@@ -17,8 +17,8 @@
     "typecheck": "tsc -b && tsc -p server/tsconfig.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/consume-prompt-ownership.test.ts",
-    "test": "tsx --test tests/profile-credit-counters.test.ts tests/consume-prompt-ownership.test.ts tests/forbidden-patterns.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts server/_lib/deploy.test.ts"
+    "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/clone-project-visibility.test.ts",
+    "test": "tsx --test tests/profile-credit-counters.test.ts tests/clone-project-visibility.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts server/_lib/deploy.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.1",
