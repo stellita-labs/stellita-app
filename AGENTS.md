@@ -2,6 +2,8 @@
 
 Guidance for humans and AI agents working in this repo. Read this before making changes.
 
+`CLAUDE.md` and `GEMINI.md` are deliberately terse single-line stubs pointing here so all guidance and OpenSpec entry points (`openspec/project.md`) are maintained in one place.
+
 ## What this is
 
 Stellita turns a natural-language prompt into a working Stellar dApp: an LLM
