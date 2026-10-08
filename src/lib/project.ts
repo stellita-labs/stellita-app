@@ -742,6 +742,9 @@ export default function App() {
     else if (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string') msg = (e as any).message
     else if (e != null) msg = String(e)
     const text = msg.trim() ? msg.trim() : 'Operation failed'
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
     flash({ kind: 'err', text })
   }
 
@@ -756,11 +759,13 @@ export default function App() {
       setMeta({ name, symbol, supply: String(supply) })
       setDecimals(Number(dec))
     } catch (e: unknown) { flashError('loadMeta', e) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadBalance = useCallback(async (a: string) => {
     try { setBalance(String(await readContract(TOKEN_ID, 'balance', VIEW_SOURCE, [addr(a)]))) }
     catch (e: unknown) { flashError('loadBalance', e) }
+    catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadActivity = useCallback(async (a: string) => {
@@ -787,6 +792,7 @@ export default function App() {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await refresh(a) }
     catch (e: unknown) { flashError('connect', e) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -805,6 +811,7 @@ export default function App() {
       flash({ kind: 'ok', text: 'Claimed 1,000 ' + sym + ' 🎉' })
       refresh(address)
     } catch (e: unknown) { flashError('claim', e) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -819,6 +826,7 @@ export default function App() {
       flash({ kind: 'ok', text: 'Sent ' + fmt(amount) + ' ' + sym + ' · ' + short(hash) })
       refresh(address)
     } catch (e: unknown) { flashError('send', e) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1113,6 +1121,9 @@ export default function App() {
     else if (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string') msg = (e as any).message
     else if (e != null) msg = String(e)
     const text = msg.trim() ? msg.trim() : 'Operation failed'
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
     flash({ kind: 'err', text })
   }
 
@@ -1124,6 +1135,7 @@ export default function App() {
       ])
       setMeta({ name: String(name), symbol: String(symbol) })
     } catch (e: unknown) { flashError('loadMeta', e) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   const loadOwned = useCallback(async (a: string) => {
@@ -1145,6 +1157,7 @@ export default function App() {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await loadOwned(a) }
     catch (e: unknown) { flashError('connect', e) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1159,6 +1172,7 @@ export default function App() {
       await loadOwned(address)
       flash({ kind: 'ok', text: tokenId != null ? 'Minted NFT #' + tokenId + ' 🎨' : 'Minted! 🎨' })
     } catch (e: unknown) { flashError('mint', e) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1590,6 +1604,9 @@ export default function App() {
     else if (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string') msg = (e as any).message
     else if (e != null) msg = String(e)
     const text = msg.trim() ? msg.trim() : 'Operation failed'
+  const flashError = (e: unknown, fallback = 'Operation failed') => {
+    const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string' ? (e as { message: string }).message : String(e ?? '')
+    const text = raw.trim() || fallback
     flash({ kind: 'err', text })
   }
 
@@ -1602,6 +1619,7 @@ export default function App() {
       setXlmBal(Number(BigInt(x)) / 10 ** DEC)
       setUsdcBal(Number(BigInt(u)) / 10 ** DEC)
     } catch (e: unknown) { flashError('loadBalances', e) }
+    } catch (e: unknown) { flashError(e) }
   }, [])
 
   useEffect(() => {
@@ -1632,6 +1650,7 @@ export default function App() {
     setBusy('connect')
     try { const a = await connectWallet(); setAddress(a); await loadBalances(a) }
     catch (e: unknown) { flashError('connect', e) }
+    catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1650,6 +1669,7 @@ export default function App() {
       flash({ kind: 'ok', text: 'Requested 10,000 test XLM 🚀' })
       setTimeout(() => loadBalances(address), 2500)
     } catch (e: unknown) { flashError('fund', e) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
@@ -1676,6 +1696,7 @@ export default function App() {
       flash({ kind: 'ok', text: 'Swapped ' + fmt(amount) + ' ' + pay.sym + ' → ' + recvAmt + ' ' + recv.sym + ' · ' + short(hash) })
       await loadBalances(address)
     } catch (e: unknown) { flashError('swap', e) }
+    } catch (e: unknown) { flashError(e) }
     finally { setBusy('') }
   }
 
