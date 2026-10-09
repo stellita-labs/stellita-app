@@ -14,6 +14,7 @@
     "check:bundle": "tsx scripts/check-bundle.ts",
     "check:env": "tsx scripts/check-env-example.ts",
     "check:forbidden-patterns": "tsx scripts/check-forbidden-patterns.ts",
+    "check:manifests": "tsx scripts/check-manifests.ts",
     "typecheck": "tsc -b && tsc -p server/tsconfig.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
