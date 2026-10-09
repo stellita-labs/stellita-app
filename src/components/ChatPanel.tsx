@@ -28,6 +28,7 @@ export function ChatPanel({
   streamingMessage,
   filePaths,
   onSend,
+  onStop,
   onRunActions,
   onSkipActions,
   readOnly = false,
@@ -44,6 +45,8 @@ export function ChatPanel({
   streamingMessage: string
   filePaths: string[]
   onSend: (text: string) => void
+  /** Abort the in-flight chat request (Stop button while streaming). */
+  onStop?: () => void
   onRunActions: (messageIndex: number, actions: AgentAction[]) => Promise<void>
   onSkipActions: (messageIndex: number) => void
   /** Read-only view (template/shared): no chat, show a clone/sign-in CTA. */
@@ -119,7 +122,7 @@ export function ChatPanel({
         {readOnly ? (
           <CloneCta onClone={onClone} signedIn={signedIn} cloning={cloning} />
         ) : (
-          <PromptInput onSend={onSend} busy={busy} filePaths={filePaths} />
+          <PromptInput onSend={onSend} busy={busy} onStop={onStop} filePaths={filePaths} />
         )}
       </div>
     </section>

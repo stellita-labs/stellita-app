@@ -1,6 +1,8 @@
 import type { Manifest, DeployResult } from '../../shared/types'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8787'
+const API_BASE =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_API_BASE ??
+  'http://localhost:8787'
 
 export class ApiError extends Error {
   status: number
@@ -16,6 +18,39 @@ export class RateLimitError extends Error {
     super('Daily rate limit reached. Try again tomorrow.')
     this.name = 'RateLimitError'
   }
+}
+
+/**
+ * Thrown when a chat stream receives no data for longer than the configured
+ * idle window. Distinguishable from a caller-initiated abort (AbortError) so the
+ * UI can tell "the upstream stalled" from "the user pressed Stop".
+ */
+export class StreamTimeoutError extends Error {
+  constructor(idleTimeoutMs: number) {
+    super(`The chat stream stalled (no data for ${idleTimeoutMs} ms) and was aborted.`)
+    this.name = 'StreamTimeoutError'
+  }
+}
+
+/** Options for streamChat: caller-initiated cancellation + a bounded idle window. */
+export interface StreamChatOptions {
+  /** Abort the request and the body read loop (e.g. a Stop button). */
+  signal?: AbortSignal
+  /** Abort when no chunk arrives within this many ms. Default 30s. */
+  idleTimeoutMs?: number
+}
+
+/** True for caller aborts and idle-timeout aborts. */
+export function isAbortError(err: unknown): boolean {
+  const name = (err as { name?: string } | null | undefined)?.name
+  return name === 'AbortError' || name === 'StreamTimeoutError'
+}
+
+/** Build an AbortError-shaped Error for the abort/timeout race. */
+function abortError(): Error {
+  const err = new Error('The chat stream was aborted.')
+  err.name = 'AbortError'
+  return err
 }
 
 export async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
@@ -111,12 +146,17 @@ export async function streamChat(
   projectId: string,
   body: { userMessage: string; history?: unknown[]; fileTree?: unknown; modelType?: string },
   onChunk: (chunk: string) => void,
+  opts: StreamChatOptions = {},
 ): Promise<string> {
+  const idleTimeoutMs = opts.idleTimeoutMs ?? 30_000
+  const externalSignal = opts.signal
+
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/chat`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    signal: externalSignal,
   })
   if (res.status === 429) throw new RateLimitError()
   if (!res.ok || !res.body) {
@@ -129,15 +169,57 @@ export async function streamChat(
     }
     throw new ApiError(res.status, message)
   }
+
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let full = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    const chunk = decoder.decode(value, { stream: true })
-    full += chunk
-    onChunk(chunk)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let timedOut = false
+  let onAbort: (() => void) | null = null
+
+  // A promise that resolves when the caller aborts. With no signal we use a
+  // never-settling promise so Promise.race ignores it.
+  const aborted = new Promise<'abort'>((resolve) => {
+    onAbort = () => resolve('abort')
+    if (externalSignal?.aborted) onAbort()
+    else externalSignal?.addEventListener('abort', onAbort, { once: true })
+  })
+  const abortRace: Promise<'abort'> = externalSignal
+    ? aborted
+    : new Promise<'abort'>(() => {})
+
+  try {
+    for (;;) {
+      // Arm the idle watchdog freshly for each chunk read.
+      const timeout = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), idleTimeoutMs)
+      })
+
+      const outcome = await Promise.race([reader.read(), abortRace, timeout])
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+
+      if (outcome === 'abort') throw abortError()
+      if (outcome === 'timeout') {
+        timedOut = true
+        throw new StreamTimeoutError(idleTimeoutMs)
+      }
+
+      const { done, value } = outcome
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      full += chunk
+      onChunk(chunk)
+    }
+    return full
+  } finally {
+    if (timer !== null) clearTimeout(timer)
+    if (onAbort) externalSignal?.removeEventListener('abort', onAbort)
+    // Release the socket when we bailed out early; the body may already be gone.
+    if (timedOut || externalSignal?.aborted) {
+      await reader.cancel().catch(() => {})
+    }
   }
-  return full
 }

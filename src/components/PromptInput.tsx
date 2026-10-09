@@ -6,12 +6,15 @@ import { PROMPT_MAX } from '../../shared/types'
 export function PromptInput({
   onSend,
   busy,
+  onStop,
   placeholder = 'Describe the app you want to build…',
   autoFocus,
   filePaths = [],
 }: {
   onSend: (text: string) => void
   busy: boolean
+  /** Abort the in-flight request (shown as a Stop button while busy). */
+  onStop?: () => void
   placeholder?: string
   autoFocus?: boolean
   filePaths?: string[]
@@ -141,6 +144,14 @@ export function PromptInput({
           ↵ to send · ⇧↵ newline{filePaths.length ? ' · @ to reference a file' : ''}
         </span>
         <div className="flex items-center gap-2.5">
+          {busy && onStop && (
+            <button
+              onClick={onStop}
+              className="rounded-full border-2 border-[var(--ink)] bg-[var(--bg2)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface)]"
+            >
+              Stop
+            </button>
+          )}
           <span className={`text-[11px] font-semibold tabular-nums ${countColor}`}>
             {count}/{PROMPT_MAX}
           </span>
