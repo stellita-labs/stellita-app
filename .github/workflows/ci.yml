@@ -60,6 +60,8 @@ jobs:
       run: pnpm test
     - name: Server boot smoke test
       run: pnpm smoke:server
+    - name: Lint (zero warnings)
+      run: pnpm lint
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 15
