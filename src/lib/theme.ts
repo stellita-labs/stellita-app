@@ -6,10 +6,15 @@ import { useSyncExternalStore } from 'react'
  *  avoid a flash; this module keeps it in sync at runtime. */
 export type Theme = 'light' | 'dark'
 
-const KEY = 'stellita_theme'
+/** localStorage key shared with the inline pre-paint script in index.html. The
+ *  two MUST stay in sync or users get a flash of the wrong theme on every load. */
+export const THEME_STORAGE_KEY = 'stellita_theme'
+
 const listeners = new Set<() => void>()
 
-function readInitial(): Theme {
+/** Read the persisted theme: the applied DOM class wins, then localStorage.
+ *  Exported so the key/value contract is testable. Never throws. */
+export function readStoredTheme(): Theme {
   if (
     typeof document !== 'undefined' &&
     document.documentElement.classList.contains('stx-dark')
@@ -17,13 +22,13 @@ function readInitial(): Theme {
     return 'dark'
   }
   try {
-    return localStorage.getItem(KEY) === 'dark' ? 'dark' : 'light'
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
   } catch {
     return 'light'
   }
 }
 
-let current: Theme = readInitial()
+let current: Theme = readStoredTheme()
 
 export function getTheme(): Theme {
   return current
@@ -33,7 +38,7 @@ export function setTheme(theme: Theme): void {
   current = theme
   document.documentElement.classList.toggle('stx-dark', theme === 'dark')
   try {
-    localStorage.setItem(KEY, theme)
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
   } catch {
     // private mode / storage disabled — theme still applies for this session
   }
