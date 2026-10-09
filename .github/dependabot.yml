@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # Runtime + toolchain dependencies (package.json uses ^ ranges and
+  # pnpm-lock.yaml is committed, so bumped versions land as reviewable PRs).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Order matters: the first matching group wins, so list the focused
+      # groups before the catch-all `tooling` group.
+      stellar:
+        patterns:
+          - "@stellar/*"
+          - "stellar-hd-wallet"
+      ai-sdk:
+        patterns:
+          - "ai"
+          - "@ai-sdk/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-router-dom"
+          - "react-resizable-panels"
+          - "@types/react"
+          - "@types/react-dom"
+      tooling:
+        patterns:
+          - "*"
+
+  # Keep the SHA-pinned actions in .github/workflows/ci.yml current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Both Dockerfiles live at the repo root: Dockerfile (node:22-slim) and
+  # Dockerfile.web (node:22-slim build stage + nginx:alpine runtime).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
