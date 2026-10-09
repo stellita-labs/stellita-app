@@ -26,7 +26,7 @@
     "@ai-sdk/openai": "^4.0.84",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@stellar/freighter-api": "^6.0.1",
-    "@stellar/stellar-sdk": "^16.0.1",
+    "@stellar/stellar-sdk": "^17.2.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "ai": "^7.0.128",
