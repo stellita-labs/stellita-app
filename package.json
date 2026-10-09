@@ -23,13 +23,13 @@
     "check:public": "tsx scripts/check-public-assets.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.1",
+    "@ai-sdk/openai": "^4.0.84",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^16.0.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
-    "ai": "^7.0.3",
+    "ai": "^7.0.128",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
