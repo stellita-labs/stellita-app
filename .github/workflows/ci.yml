@@ -27,6 +27,8 @@ jobs:
       run: pnpm check:bundle
     - name: Check forbidden patterns
       run: pnpm check:forbidden-patterns
+    - name: Check env.example against process.env reads
+      run: pnpm check:env
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 15
