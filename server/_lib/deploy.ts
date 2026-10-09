@@ -38,32 +38,55 @@ type Sleep = (ms: number) => Promise<void>
 const sleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /** The Soroban scval type a config field maps to (derived from its UI type). */
-function scTypeOf(field: ManifestConfigField): string {
+export function scTypeOf(field: ManifestConfigField): string {
   if (field.scType) return field.scType
   if (field.type === 'address') return 'address'
   if (field.type === 'number') return 'i128'
   return 'string'
 }
 
-function toScVal(
+/** The scval types a manifest config field may encode to. */
+export const SC_TYPES = ['string', 'address', 'i128', 'u32', 'u64', 'bool'] as const
+
+/**
+ * Encode one constructor argument as an ScVal. `fieldKey` is used only to name
+ * the offending field when an unsupported type is requested.
+ *
+ * ScVal args MUST be wrapped (addr()/i128()/u32()/u64()/pathVec()); a raw string
+ * or number throws an opaque "XDR Write Error" deep in the SDK. The
+ * `{{deployer}}` sentinel resolves to the ephemeral deployer's public key.
+ */
+export function toScVal(
   value: unknown,
   scType: string,
   deployerPk: string,
+  fieldKey = 'value',
 ): xdr.ScVal {
-  if (scType === 'address') {
-    const addr =
-      value === '{{deployer}}' || !value ? deployerPk : String(value)
-    return new Address(addr).toScVal()
+  switch (scType) {
+    case 'address': {
+      const addr =
+        value === '{{deployer}}' || !value ? deployerPk : String(value)
+      return new Address(addr).toScVal()
+    }
+    case 'i128':
+      return nativeToScVal(
+        BigInt(typeof value === 'number' ? Math.trunc(value) : String(value).trim()),
+        { type: 'i128' },
+      )
+    case 'u32':
+      return nativeToScVal(Number(value), { type: 'u32' })
+    case 'u64':
+      return nativeToScVal(BigInt(Number(value)), { type: 'u64' })
+    case 'bool':
+      return nativeToScVal(Boolean(value))
+    case 'string':
+      return nativeToScVal(String(value), { type: 'string' })
+    default:
+      throw new Error(
+        `Unsupported config type "${scType}" for field "${fieldKey}" ` +
+          `(expected one of: ${SC_TYPES.join(', ')})`,
+      )
   }
-  if (scType === 'i128')
-    return nativeToScVal(
-      BigInt(typeof value === 'number' ? Math.trunc(value) : String(value).trim()),
-      { type: 'i128' },
-    )
-  if (scType === 'u32') return nativeToScVal(Number(value), { type: 'u32' })
-  if (scType === 'u64') return nativeToScVal(BigInt(Number(value)), { type: 'u64' })
-  if (scType === 'bool') return nativeToScVal(Boolean(value))
-  return nativeToScVal(String(value), { type: 'string' })
 }
 
 async function submit(
@@ -215,7 +238,7 @@ export async function deployContract(
   const constructorArgs = manifest.init.argsFromConfig.map((key) => {
     const field = fields.get(key)
     if (!field) throw new Error(`Constructor arg "${key}" has no config field`)
-    return toScVal(config[key] ?? field.default, scTypeOf(field), deployerPk)
+    return toScVal(config[key] ?? field.default, scTypeOf(field), deployerPk, key)
   })
 
   const result = await attemptSubmit((account) =>
