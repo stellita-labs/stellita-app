@@ -307,3 +307,19 @@ jobs:
           '
         cache-from: type=gha
         cache-to: type=gha,mode=max
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.21.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Audit production dependencies
+      run: pnpm audit --audit-level high --prod
