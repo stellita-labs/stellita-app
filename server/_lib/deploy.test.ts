@@ -4,6 +4,9 @@ import { Account, Keypair, nativeToScVal, rpc } from '@stellar/stellar-sdk'
 import { contractIdFromReturnValue, deployContract } from './deploy'
 import type { DeployDeps } from './deploy'
 import type { Manifest } from '../../shared/types'
+import { Keypair, nativeToScVal, scValToNative } from '@stellar/stellar-sdk'
+import type { ManifestConfigField } from '../../shared/types'
+import { contractIdFromReturnValue, scTypeOf, toScVal } from './deploy'
 
 const MANIFEST_ID = 'test-manifest'
 const TX_HASH = 'deadbeef1234'
@@ -215,6 +218,51 @@ describe('deployContract (mocked RPC)', () => {
           makeDeps({}),
         ),
       (err: unknown) => /not a deployable contract/.test((err as Error).message),
+describe('scTypeOf', () => {
+  it('derives the scval type from the field UI type', () => {
+    assert.equal(scTypeOf({ key: 'name', label: 'Name', type: 'string' }), 'string')
+    assert.equal(scTypeOf({ key: 'owner', label: 'Owner', type: 'address' }), 'address')
+    assert.equal(scTypeOf({ key: 'supply', label: 'Supply', type: 'number' }), 'i128')
+  })
+
+  it('honours an explicit scType override', () => {
+    assert.equal(scTypeOf({ key: 'n', label: 'N', type: 'number', scType: 'u32' }), 'u32')
+  })
+})
+
+describe('toScVal', () => {
+  const deployerPk = Keypair.random().publicKey()
+
+  it('encodes every scType the manifests use', () => {
+    assert.equal(toScVal('Demo', 'string', deployerPk).switch().name, 'scvString')
+    assert.equal(toScVal(deployerPk, 'address', deployerPk).switch().name, 'scvAddress')
+    assert.equal(toScVal(1000, 'i128', deployerPk).switch().name, 'scvI128')
+    assert.equal(toScVal(7, 'u32', deployerPk).switch().name, 'scvU32')
+    assert.equal(toScVal(7, 'u64', deployerPk).switch().name, 'scvU64')
+    assert.equal(toScVal(true, 'bool', deployerPk).switch().name, 'scvBool')
+  })
+
+  it('resolves the {{deployer}} placeholder to the deployer public key', () => {
+    const val = toScVal('{{deployer}}', 'address', deployerPk)
+    assert.equal(String(scValToNative(val)), deployerPk)
+  })
+
+  it('resolves a manifest default placeholder (oz-nft owner)', () => {
+    const owner: ManifestConfigField = {
+      key: 'owner',
+      label: 'Owner',
+      type: 'address',
+      default: '{{deployer}}',
+    }
+    const val = toScVal(owner.default, scTypeOf(owner), deployerPk, owner.key)
+    assert.equal(String(scValToNative(val)), deployerPk)
+  })
+
+  it('throws a clear error naming the field and the unsupported type', () => {
+    assert.throws(
+      () => toScVal('x', 'blob', deployerPk, 'uri'),
+      (err: unknown) =>
+        err instanceof Error && err.message.includes('uri') && err.message.includes('blob'),
     )
   })
 })
