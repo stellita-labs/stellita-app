@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import type { Request, Response } from 'express'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireUser } from '../middleware/auth.js'
 import { adminClient } from '../lib/supabase.js'
@@ -72,7 +73,7 @@ async function ensureShareToken(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** GET /api/projects — list the current user's own projects (never templates) */
-router.get('/projects', requireUser, async (req, res) => {
+export async function listProjectsHandler(req: Request, res: Response): Promise<void> {
   const { data, error } = await req.supabase
     .from('projects')
     .select('id,slug,name,created_at,updated_at')
@@ -85,7 +86,9 @@ router.get('/projects', requireUser, async (req, res) => {
     return
   }
   res.json(data)
-})
+}
+
+router.get('/projects', requireUser, listProjectsHandler)
 
 /** GET /api/templates — PUBLIC (no auth): system-owned starter templates for the
  *  landing badges + /templates page. Uses the admin client so logged-out visitors
@@ -136,7 +139,7 @@ async function uniqueName(
 }
 
 /** POST /api/projects — create a new project */
-router.post('/projects', requireUser, async (req, res) => {
+export async function createProjectHandler(req: Request, res: Response): Promise<void> {
   const { name, slug, current_files } = req.body as {
     name?: string
     slug?: string
@@ -157,7 +160,9 @@ router.post('/projects', requireUser, async (req, res) => {
     return
   }
   res.status(201).json(data)
-})
+}
+
+router.post('/projects', requireUser, createProjectHandler)
 
 /** GET /api/projects/:id — fetch project + versions + messages + contracts */
 router.get('/projects/:id', requireUser, async (req, res) => {
@@ -237,7 +242,7 @@ router.delete('/projects/:id', requireUser, async (req, res) => {
 })
 
 /** PATCH /api/projects/:id/files — update current_files (manual edits, no version) */
-router.patch('/projects/:id/files', requireUser, async (req, res) => {
+export async function updateFilesHandler(req: Request, res: Response): Promise<void> {
   const { id } = req.params
   const { files } = req.body as { files?: Record<string, unknown> }
   if (!files) { res.status(400).json({ error: 'files required' }); return }
@@ -254,7 +259,9 @@ router.patch('/projects/:id/files', requireUser, async (req, res) => {
     return
   }
   res.json(data)
-})
+}
+
+router.patch('/projects/:id/files', requireUser, updateFilesHandler)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Versions
@@ -585,7 +592,7 @@ router.post('/projects/:id/share/email', requireUser, async (req, res) => {
 
 /** POST /api/projects/:id/clone — clone a project or template into the caller's
  *  account. Returns the new project's id + slug so the client can navigate. */
-router.post('/projects/:id/clone', requireUser, async (req, res) => {
+export async function cloneProjectHandler(req: Request, res: Response): Promise<void> {
   const { id } = req.params
   const { data: newId, error } = await req.supabase.rpc('clone_project', {
     p_source: id,
@@ -605,7 +612,9 @@ router.post('/projects/:id/clone', requireUser, async (req, res) => {
     return
   }
   res.json(proj)
-})
+}
+
+router.post('/projects/:id/clone', requireUser, cloneProjectHandler)
 
 /** GET /api/shared/:token — read-only public view (no auth required) */
 router.get('/shared/:token', async (req, res) => {
