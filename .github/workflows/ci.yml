@@ -214,3 +214,19 @@ jobs:
         \ | tr '\\n' ' ')\"\nif [ -n \"$failed\" ]; then\n  echo \"::error::These\
         \ required jobs did not succeed: $failed\"\n  exit 1\nfi\necho \"All required\
         \ jobs succeeded.\"\n"
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.21.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Validate contract manifests
+      run: pnpm check:manifests
