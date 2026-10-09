@@ -216,20 +216,41 @@ jobs:
         \ jobs succeeded.\"\n"
   contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
+    - name: Install Rust with the Soroban wasm target
+      uses: dtolnay/rust-toolchain@stable
       with:
-        version: 10.21.0
-    - uses: actions/setup-node@v4
+        targets: wasm32v1-none
+    - name: Cache cargo
+      uses: actions/cache@v4
       with:
-        node-version: 22
-        cache: pnpm
-    - name: Install dependencies
-      run: pnpm install --frozen-lockfile
-    - name: Validate contract manifests
-      run: pnpm check:manifests
+        path: '~/.cargo/bin
+
+          ~/.cargo/registry
+
+          ~/.cargo/git
+
+          '
+        key: ${{ runner.os }}-stellar-cli-25.2.0
+    - name: Install stellar-cli 25.2.0
+      run: "if ! command -v stellar >/dev/null 2>&1; then\n  cargo install --locked\
+        \ stellar-cli --version 25.2.0\nfi\n"
+    - name: Rebuild the WASM catalog into a temp directory
+      run: OUT="$RUNNER_TEMP/wasm-rebuild" ./contracts/build.sh
+    - name: Compare rebuilt WASM with the committed WASM
+      run: "set -euo pipefail\ncommitted=\"contracts/wasm/SHA256SUMS\"\nrebuilt=\"\
+        $RUNNER_TEMP/wasm-rebuild/SHA256SUMS\"\nstatus=0\nwhile read -r hash name;\
+        \ do\n  [ -n \"$name\" ] || continue\n  fresh=\"$(awk -v n=\"$name\" '$2 ==\
+        \ n { print $1 }' \"$rebuilt\")\"\n  if [ -z \"$fresh\" ]; then\n    echo\
+        \ \"::error::contracts/build.sh did not produce $name\"\n    status=1\n  elif\
+        \ [ \"$fresh\" != \"$hash\" ]; then\n    echo \"::error::$name: committed\
+        \ $hash != rebuilt $fresh\"\n    status=1\n  else\n    echo \"ok  $name  $hash\"\
+        \n  fi\ndone < \"$committed\"\nif [ \"$status\" -ne 0 ]; then\n  echo \"---\
+        \ committed ($committed) ---\"\n  cat \"$committed\"\n  echo \"--- rebuilt\
+        \ ($rebuilt) ---\"\n  cat \"$rebuilt\"\n  exit 1\nfi\necho \"Committed WASM\
+        \ matches contracts/build.sh output.\"\n"
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
