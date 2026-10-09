@@ -11,7 +11,7 @@ import {
 } from 'react'
 import type { ChatMessage, FileTree, DeployedContract } from '../../shared/types'
 import type { Activity } from '../lib/api'
-import { parseActivity, parseStreamingMessage } from '../lib/api'
+import { parseActivity, parseStreamingMessage, parsePersistSentinel } from '../lib/api'
 import { applyFileOps, initialFileTree, injectDappPlumbing } from '../lib/project'
 import { buildContractsFile, CONTRACTS_FILE } from '../lib/contracts'
 import { api, streamChat, RateLimitError } from '../lib/backend'
@@ -464,6 +464,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
               }
             : {}),
         })
+
+        // The server appends a terminal { saved } sentinel after the agent JSON.
+        // If persistence failed post-stream, surface a non-blocking warning
+        // instead of letting the turn silently disappear on reload.
+        const persist = parsePersistSentinel(accumulated)
+        if (persist?.saved === false) {
+          patch(slug, {
+            error:
+              'Your changes were generated but could not be saved. Reloading may lose them.',
+          })
+        }
       } else {
         // No backend id yet — nothing to stream; surface a clear error.
         patch(slug, {
