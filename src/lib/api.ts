@@ -12,11 +12,16 @@ export interface Activity {
 
 /** Extract file ops seen so far from the partial JSON text. */
 export function parseActivity(text: string): Activity[] {
-  const ops = [...text.matchAll(/"op"\s*:\s*"(create|edit|delete)"/g)].map(
-    (m) => m[1] as Activity['op'],
-  )
-  const paths = [...text.matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1])
-  return paths.map((path, i) => ({ op: ops[i] ?? 'edit', path }))
+  const activity: Activity[] = []
+  // One scan pairs each `op` with the `path` that follows it in the SAME
+  // file-op object. Independent op/path scans drift as soon as a file's
+  // *content* contains the literal text "path" (e.g. a fetch helper), which
+  // used to mislabel a delete as a create in the live activity feed.
+  const opPath = /"op"\s*:\s*"(create|edit|delete)"[\s\S]*?"path"\s*:\s*"([^"]+)"/g
+  for (const match of text.matchAll(opPath)) {
+    activity.push({ op: match[1] as Activity['op'], path: match[2] })
+  }
+  return activity
 }
 
 /** Extract the (possibly partial) chat message from the streaming JSON. */
