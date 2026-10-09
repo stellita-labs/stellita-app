@@ -8,7 +8,7 @@ on:
     - main
   pull_request: null
   schedule:
-  - cron: 0 * * * *
+  - cron: 0 6 * * 1
   workflow_dispatch: null
 jobs:
   verify:
@@ -130,6 +130,22 @@ jobs:
         node-version: 22
         cache: pnpm
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.21.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Scan for committed secrets (gitleaks)
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   typecheck-server:
     runs-on: ubuntu-latest
     timeout-minutes: 15

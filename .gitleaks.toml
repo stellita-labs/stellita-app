@@ -1,0 +1,16 @@
+title = "Stellita gitleaks configuration"
+
+# Extend gitleaks' built-in rules rather than replacing them, so the default
+# AWS / generic-key detectors keep running.
+[extend]
+useDefault = true
+
+# env.example holds intentionally-empty placeholders and openspec/project.md
+# lists public Soroswap testnet contract ids (C...), neither of which is a
+# secret. Allow-list those two paths so they can never trip the scan.
+[allowlist]
+description = "Placeholder env values and public testnet contract ids"
+paths = [
+  '''(^|/)env\.example$''',
+  '''(^|/)openspec/project\.md$''',
+]
