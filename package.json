@@ -19,7 +19,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/clone-project-visibility.test.ts",
-    "test": "tsx --test tests/profile-credit-counters.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts tests/server-error-response.test.ts server/_lib/deploy.test.ts server/routes/projects.test.ts",
+    "test": "tsx --test tests/profile-credit-counters.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts tests/server-error-response.test.ts server/_lib/deploy.test.ts server/routes/chat.test.ts",
     "check:public": "tsx scripts/check-public-assets.ts",
     "smoke:server": "tsx scripts/smoke-server.ts",
     "check:commits": "tsx scripts/check-commits.ts",
