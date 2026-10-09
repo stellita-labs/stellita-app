@@ -1,12 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
-import type { Request, Response } from 'express'
+import type { CookieOptions, Request, Response } from 'express'
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY ?? ''
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY ?? ''
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN
 const IS_PROD = process.env.NODE_ENV === 'production'
+
+/**
+ * The exact attributes written onto every auth cookie. Pure and exported so the
+ * production/dev `domain` decision — which silently breaks all auth in one
+ * environment when wrong — is unit-testable.
+ *
+ * Only scope the cookie to a parent domain in production. In dev the browser is
+ * on localhost, where any Domain attribute (e.g. an accidental ".stellita.app"
+ * left in .env.local) makes the browser REJECT the cookie → the session never
+ * persists. Host-only in dev. An empty COOKIE_DOMAIN must fall back to host-only
+ * (undefined), never the empty string.
+ */
+export function cookieWriteOptions(opts: {
+  isProd: boolean
+  cookieDomain?: string
+}): CookieOptions {
+  return {
+    httpOnly: true,
+    secure: opts.isProd,
+    sameSite: opts.isProd ? 'none' : 'lax',
+    domain: opts.isProd ? opts.cookieDomain || undefined : undefined,
+  }
+}
 
 /**
  * Per-request RLS-respecting client. Uses the publishable (anon) key + the
@@ -24,14 +47,7 @@ export function serverClient(req: Request, res: Response) {
         for (const { name, value, options } of cookiesToSet) {
           res.cookie(name, value, {
             ...options,
-            httpOnly: true,
-            secure: IS_PROD,
-            sameSite: IS_PROD ? 'none' : 'lax',
-            // Only scope the cookie to a parent domain in production. In dev the
-            // browser is on localhost, where any Domain attribute (e.g. an
-            // accidental ".stellita.app" left in .env.local) makes the browser
-            // REJECT the cookie → the session never persists. Host-only in dev.
-            domain: IS_PROD ? COOKIE_DOMAIN || undefined : undefined,
+            ...cookieWriteOptions({ isProd: IS_PROD, cookieDomain: COOKIE_DOMAIN }),
           })
         }
       },
