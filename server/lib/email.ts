@@ -2,9 +2,17 @@
  * Tiny Resend mailer. Reads RESEND_API_KEY + EMAIL_FROM from the environment
  * (loaded from .env.local by server/env.ts). If no key is set, it no-ops with a
  * warning so local dev never crashes on a missing key.
+ *
+ * The key/from are read lazily (per call) so the failure handling can be
+ * unit-tested by varying the environment between calls.
  */
-const RESEND_API_KEY = process.env.RESEND_API_KEY ?? ''
-const EMAIL_FROM = process.env.EMAIL_FROM ?? 'Stellita <noreply@stellita.app>'
+function resendApiKey(): string {
+  return process.env.RESEND_API_KEY ?? ''
+}
+
+function emailFrom(): string {
+  return process.env.EMAIL_FROM ?? 'Stellita <noreply@stellita.app>'
+}
 
 export interface SendResult {
   ok: boolean
@@ -21,7 +29,8 @@ export async function sendEmail({
   subject: string
   html: string
 }): Promise<SendResult> {
-  if (!RESEND_API_KEY) {
+  const apiKey = resendApiKey()
+  if (!apiKey) {
     console.warn('[email] RESEND_API_KEY not set — skipping send to', to)
     return { ok: false, error: 'email not configured' }
   }
@@ -29,10 +38,10 @@ export async function sendEmail({
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+      body: JSON.stringify({ from: emailFrom(), to, subject, html }),
     })
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { message?: string }
