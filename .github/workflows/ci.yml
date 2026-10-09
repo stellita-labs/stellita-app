@@ -103,8 +103,10 @@ jobs:
         cache: pnpm
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
-    - name: Run unit tests
+    - name: Unit tests
       run: pnpm test
+    - name: Coverage
+      run: pnpm test:coverage
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 15
