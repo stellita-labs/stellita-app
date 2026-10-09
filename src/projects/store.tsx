@@ -742,7 +742,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const addDeployedContract = (slug: string, contract: DeployedContract) => {
     const p = ref.current[slug]
     if (!p) return
-    const contracts = [...p.contracts, contract]
+    const existingContract = p.contracts.findIndex((c) => c.manifestId === contract.manifestId)
+    const contracts =
+      existingContract === -1
+        ? [...p.contracts, contract]
+        : p.contracts.map((c, i) => (i === existingContract ? contract : c))
     const next = {
       ...injectDappPlumbing(p.fileTree),
       [CONTRACTS_FILE]: buildContractsFile(contracts),
