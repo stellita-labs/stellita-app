@@ -55,6 +55,8 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Test
       run: pnpm test
+    - name: Server boot smoke test
+      run: pnpm smoke:server
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 15
