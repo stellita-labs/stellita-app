@@ -2,7 +2,7 @@
 # Deploy as a SEPARATE Dokploy app from the backend (set Docker File Path to
 # "Dockerfile.web"). VITE_API_BASE is a public URL (it ends up in the client
 # bundle anyway), so it's baked at build time with a prod default.
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./

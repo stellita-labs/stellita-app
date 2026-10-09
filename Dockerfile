@@ -1,6 +1,6 @@
 # Backend (Express API) image for Dokploy / any container host.
 # The frontend is deployed separately (Vercel); this runs only the server.
-FROM node:22-slim
+FROM node:25-slim
 
 # pnpm via corepack (version pinned by package.json "packageManager")
 RUN corepack enable
