@@ -24,6 +24,7 @@ update projects set visibility = 'link' where is_template = true;
 -- every call, so a project could accumulate many live tokens. Collapse any
 -- existing duplicates (keep the earliest, id as tiebreaker), then enforce
 -- uniqueness so ensureShareToken() is truly idempotent and free of races.
+-- destructive: collapses duplicate share tokens (keeps the earliest per project).
 delete from project_shares a
   using project_shares b
   where a.project_id = b.project_id

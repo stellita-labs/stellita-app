@@ -43,6 +43,8 @@ jobs:
         cache: pnpm
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
+    - name: Lint migrations (ordering + destructive DDL)
+      run: pnpm check:migrations
     - name: Run migration tests
       run: pnpm test:migrations
   security:
