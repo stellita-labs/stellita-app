@@ -14,9 +14,10 @@ const router = Router()
  * POST /api/projects/:id/chat
  *
  * Streaming chat endpoint. Flow:
- *   1. Rate-limit via consume_prompt RPC (atomic, server-side)
- *   2. Resolve model from the models table (adminClient — public ref data)
- *   3. Guardrail check
+ *   1. Resolve model from the models table (adminClient — public ref data)
+ *   2. Guardrail check — BEFORE consuming a credit, so a blocked prompt never
+ *      burns one from the user's daily allowance
+ *   3. Rate-limit via consume_prompt RPC (atomic, server-side)
  *   4. Stream LLM output as text/plain (client parses live JSON)
  *   5. After stream finishes: persist user msg, assistant msg, version (if
  *      files changed), and a usage_event — all without blocking the stream.
@@ -40,20 +41,7 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
 
   const apiKey = process.env.OPENAI_API_KEY ?? ''
 
-  // ── 1. Rate limit ──────────────────────────────────────────────────────────
-  const { data: allowed, error: rpcErr } = await req.supabase.rpc('consume_prompt', {
-    p_user: req.user.id,
-  })
-  if (rpcErr) {
-    errorResponse(res, 500, 'Failed to verify account prompt quota', rpcErr, { route: 'POST /api/projects/:id/chat' })
-    return
-  }
-  if (allowed === false) {
-    res.status(429).json({ error: 'rate_limited' })
-    return
-  }
-
-  // ── 2. Resolve model ───────────────────────────────────────────────────────
+  // ── 1. Resolve model ───────────────────────────────────────────────────────
   const admin = adminClient()
   interface ModelRow {
     model_type: string
@@ -86,7 +74,7 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     modelRow?.provider_model ?? process.env.OPENAI_MODEL ?? 'gpt-5.4-mini'
   const resolvedModelType = (modelRow?.model_type ?? modelType ?? 'XLM_MINI') as string
 
-  // ── 3. Guardrail ───────────────────────────────────────────────────────────
+  // ── 2. Guardrail ───────────────────────────────────────────────────────────
   const guardrail = await checkGuardrail({
     apiKey,
     model: providerModel,
@@ -119,6 +107,19 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
       .single()
 
     res.json({ blocked: true, message: blockedMsg })
+    return
+  }
+
+  // ── 3. Rate limit ──────────────────────────────────────────────────────────
+  const { data: allowed, error: rpcErr } = await req.supabase.rpc('consume_prompt', {
+    p_user: req.user.id,
+  })
+  if (rpcErr) {
+    errorResponse(res, 500, 'Failed to verify account prompt quota', rpcErr, { route: 'POST /api/projects/:id/chat' })
+    return
+  }
+  if (allowed === false) {
+    res.status(429).json({ error: 'rate_limited' })
     return
   }
 
