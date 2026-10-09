@@ -157,3 +157,25 @@ jobs:
         node-version: 22
         cache: pnpm
     - uses: actions/checkout@v7
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.21.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Validate commit messages
+      run: pnpm check:commits
+      env:
+        COMMIT_FROM: ${{ github.event.pull_request.base.sha }}
+        COMMIT_TO: ${{ github.event.pull_request.head.sha }}
