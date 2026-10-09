@@ -323,3 +323,5 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Audit production dependencies
       run: pnpm audit --audit-level high --prod
+permissions:
+  contents: read
