@@ -40,7 +40,57 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
 
   const apiKey = process.env.OPENAI_API_KEY ?? ''
 
-  // ── 1. Rate limit ──────────────────────────────────────────────────────────
+  // ── 1. Validate the requested model tier BEFORE consuming a credit ─────────
+  // The models table is the source of truth for which tiers are enabled. An
+  // unknown or disabled tier must be rejected up front: otherwise a credit is
+  // billed, a different model runs than the client asked for, and usage_events
+  // records a model_type that does not exist in the models table.
+  const admin = adminClient()
+  interface ModelRow {
+    model_type: string
+    provider_model: string
+    input_usd_per_mtok: number
+    cached_input_usd_per_mtok: number
+    output_usd_per_mtok: number
+    is_default: boolean
+  }
+
+  const { data: modelRows, error: modelsErr } = await admin
+    .from('models')
+    .select('model_type,provider_model,input_usd_per_mtok,cached_input_usd_per_mtok,output_usd_per_mtok,is_default')
+    .eq('enabled', true)
+
+  if (modelsErr) {
+    errorResponse(res, 500, 'Failed to resolve model tiers', modelsErr, { route: 'POST /api/projects/:id/chat' })
+    return
+  }
+
+  const enabledModels = (modelRows ?? []) as ModelRow[]
+  const enabledModelTypes = enabledModels.map((m) => m.model_type)
+
+  if (modelType !== undefined && !enabledModelTypes.includes(modelType)) {
+    res.status(400).json({
+      error: `unknown or disabled modelType: ${modelType}`,
+      enabledModelTypes,
+    })
+    return
+  }
+
+  const modelRow = modelType
+    ? enabledModels.find((m) => m.model_type === modelType) ?? null
+    : enabledModels.find((m) => m.is_default) ?? enabledModels[0] ?? null
+
+  if (!modelRow) {
+    errorResponse(res, 500, 'No enabled model tiers are configured', undefined, { route: 'POST /api/projects/:id/chat' })
+    return
+  }
+
+  const providerModel = modelRow.provider_model
+  // Never echo a client-supplied tier back into the DB: the recorded tier always
+  // comes from the enabled models row that actually runs.
+  const resolvedModelType = modelRow.model_type
+
+  // ── 2. Rate limit (only after the requested tier is known to be valid) ─────
   const { data: allowed, error: rpcErr } = await req.supabase.rpc('consume_prompt', {
     p_user: req.user.id,
   })
@@ -52,39 +102,6 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     res.status(429).json({ error: 'rate_limited' })
     return
   }
-
-  // ── 2. Resolve model ───────────────────────────────────────────────────────
-  const admin = adminClient()
-  interface ModelRow {
-    model_type: string
-    provider_model: string
-    input_usd_per_mtok: number
-    cached_input_usd_per_mtok: number
-    output_usd_per_mtok: number
-  }
-
-  let modelRow: ModelRow | null = null
-  if (modelType) {
-    const { data } = await admin
-      .from('models')
-      .select('model_type,provider_model,input_usd_per_mtok,cached_input_usd_per_mtok,output_usd_per_mtok')
-      .eq('model_type', modelType)
-      .eq('enabled', true)
-      .single()
-    modelRow = data as ModelRow | null
-  }
-  if (!modelRow) {
-    const { data } = await admin
-      .from('models')
-      .select('model_type,provider_model,input_usd_per_mtok,cached_input_usd_per_mtok,output_usd_per_mtok')
-      .eq('is_default', true)
-      .eq('enabled', true)
-      .single()
-    modelRow = data as ModelRow | null
-  }
-  const providerModel =
-    modelRow?.provider_model ?? process.env.OPENAI_MODEL ?? 'gpt-5.4-mini'
-  const resolvedModelType = (modelRow?.model_type ?? modelType ?? 'XLM_MINI') as string
 
   // ── 3. Guardrail ───────────────────────────────────────────────────────────
   const guardrail = await checkGuardrail({
@@ -155,9 +172,9 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     const promptTokens = usageData?.inputTokens ?? 0
     const completionTokens = usageData?.outputTokens ?? 0
 
-    // Cost calculation
-    const inputRate = modelRow?.input_usd_per_mtok ?? 0.75
-    const outputRate = modelRow?.output_usd_per_mtok ?? 4.5
+    // Cost calculation — rates come from the enabled models row that ran.
+    const inputRate = modelRow.input_usd_per_mtok
+    const outputRate = modelRow.output_usd_per_mtok
     const costUsd = (promptTokens / 1e6) * inputRate + (completionTokens / 1e6) * outputRate
 
     // Persist user message first
