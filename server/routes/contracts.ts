@@ -1,12 +1,28 @@
 import { Router } from 'express'
+import { StrKey } from '@stellar/stellar-sdk'
 import { requireUser } from '../middleware/auth.js'
 import { listManifests, getManifest } from '../_lib/contracts.js'
 import { deployContract } from '../_lib/deploy.js'
 import { mintDemoTokens, DEMO_TOKEN_ID } from '../_lib/faucet.js'
 import { mintNft, DEMO_NFT_ID } from '../_lib/nft.js'
 import { errorResponse } from '../_lib/errors.js'
+import { logger } from '../_lib/logger.js'
 
 const router = Router()
+
+/**
+ * Neutral client-facing message for an unconfigured faucet. Deliberately names
+ * no environment variable — an unconfigured deployment is not a server bug, and
+ * the response must not advertise which secret is missing. The detailed reason
+ * goes to the server log only.
+ */
+const FAUCET_UNAVAILABLE = 'the testnet faucet is unavailable'
+
+/** Validate a Stellar account (G…) address using the same StrKey parser the SDK
+ *  uses internally, so a malformed address is rejected before any mint attempt. */
+function isValidAddress(address: string): boolean {
+  return StrKey.isValidEd25519PublicKey(address)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract catalog
@@ -82,8 +98,22 @@ router.post('/projects/:id/deploy', requireUser, async (req, res) => {
 router.post('/faucet', requireUser, async (req, res) => {
   const { address, amount } = req.body as { address?: string; amount?: number }
   if (!address) { res.status(400).json({ error: 'address required' }); return }
+  if (!isValidAddress(address)) {
+    res.status(400).json({ error: 'invalid Stellar address' })
+    return
+  }
 
-  const hash = await mintDemoTokens(address, amount, process.env.FAUCET_SECRET)
+  // Validate configuration AFTER the request body, so a malformed address is a
+  // 400 regardless of deployment state. An unconfigured faucet is a 503 (the
+  // service is unavailable), not a 500.
+  const secret = process.env.FAUCET_SECRET
+  if (!secret) {
+    logger.error('[faucet] FAUCET_SECRET is not set; refusing to mint demo tokens')
+    res.status(503).json({ error: FAUCET_UNAVAILABLE })
+    return
+  }
+
+  const hash = await mintDemoTokens(address, amount, secret)
   res.json({ hash, tokenId: DEMO_TOKEN_ID })
 })
 
@@ -95,8 +125,19 @@ router.post('/faucet', requireUser, async (req, res) => {
 router.post('/mint-nft', requireUser, async (req, res) => {
   const { address } = req.body as { address?: string }
   if (!address) { res.status(400).json({ error: 'address required' }); return }
+  if (!isValidAddress(address)) {
+    res.status(400).json({ error: 'invalid Stellar address' })
+    return
+  }
 
-  const result = await mintNft(address, process.env.FAUCET_SECRET)
+  const secret = process.env.FAUCET_SECRET
+  if (!secret) {
+    logger.error('[mint-nft] FAUCET_SECRET is not set; refusing to mint the demo NFT')
+    res.status(503).json({ error: FAUCET_UNAVAILABLE })
+    return
+  }
+
+  const result = await mintNft(address, secret)
   res.json({ ...result, nftId: DEMO_NFT_ID })
 })
 
