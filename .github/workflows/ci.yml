@@ -27,6 +27,8 @@ jobs:
       run: pnpm check:bundle
     - name: Check forbidden patterns
       run: pnpm check:forbidden-patterns
+    - name: Server boot smoke test
+      run: pnpm smoke:server
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 15
