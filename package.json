@@ -23,7 +23,8 @@
     "check:public": "tsx scripts/check-public-assets.ts",
     "smoke:server": "tsx scripts/smoke-server.ts",
     "check:commits": "tsx scripts/check-commits.ts",
-    "check:network": "tsx scripts/check-network.ts"
+    "check:network": "tsx scripts/check-network.ts",
+    "check:manifests": "tsx scripts/check-manifests.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.84",
