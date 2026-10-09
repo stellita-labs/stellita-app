@@ -1,17 +1,18 @@
 // Standalone validation of the pure-JS deploy path (no stellar CLI).
-// This mirrors exactly what the serverless /api/deploy will do, so we prove the
-// SDK flow on testnet before wiring it into the backend.
+// Mirrors server/_lib/deploy.ts: the server is an Express API under server/, and
+// there is no serverless /api/deploy. This proves the SDK flow on testnet.
 //
 //   node contracts/scripts/deploy.mjs <wasmPath> '<configJson>' '<argsOrder>' '<typesJson>'
 //
 // Example (fungible token):
 //   node contracts/scripts/deploy.mjs contracts/wasm/fungible-token.wasm \
-//     '{"name":"Peña","symbol":"PENA","owner":"{{deployer}}","initial_supply":10000}' \
+//     '{"name":"Penny","symbol":"PENNY","owner":"{{deployer}}","initial_supply":10000}' \
 //     'name,symbol,owner,initial_supply' \
 //     '{"name":"string","symbol":"string","owner":"address","initial_supply":"i128"}'
 
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { pathToFileURL } from 'node:url'
 import {
   Keypair,
   TransactionBuilder,
@@ -27,16 +28,45 @@ const RPC_URL = 'https://soroban-testnet.stellar.org'
 const FRIENDBOT = 'https://friendbot.stellar.org'
 const PASSPHRASE = Networks.TESTNET
 
-/** Convert a config value to an ScVal using the contract's declared arg type. */
-function toScVal(value, type, deployerPk) {
+export const USAGE = `Usage: node contracts/scripts/deploy.mjs <wasmPath> '<configJson>' '<argsOrder>' '<typesJson>'
+
+  wasmPath     path to the compiled contract WASM
+  configJson   JSON object of constructor values
+  argsOrder    comma-separated constructor arg keys, in order
+  typesJson    JSON object mapping each key to its ScVal type
+
+Example:
+  node contracts/scripts/deploy.mjs contracts/wasm/fungible-token.wasm \\
+    '{"name":"Penny","symbol":"PENNY","owner":"{{deployer}}","initial_supply":10000}' \\
+    'name,symbol,owner,initial_supply' \\
+    '{"name":"string","symbol":"string","owner":"address","initial_supply":"i128"}'`
+
+/** Convert a config value to an ScVal using the contract's declared arg type.
+ *  Kept in lockstep with scTypeOf()/toScVal() in server/_lib/deploy.ts. */
+export function toScVal(value, type, deployerPk) {
   if (type === 'address') {
-    const addr = value === '{{deployer}}' || !value ? deployerPk : value
+    const addr = value === '{{deployer}}' || !value ? deployerPk : String(value)
     return new Address(addr).toScVal()
   }
-  if (type === 'i128') return nativeToScVal(BigInt(value), { type: 'i128' })
+  if (type === 'i128')
+    return nativeToScVal(
+      BigInt(typeof value === 'number' ? Math.trunc(value) : String(value).trim()),
+      { type: 'i128' },
+    )
   if (type === 'u32') return nativeToScVal(Number(value), { type: 'u32' })
-  if (type === 'u64') return nativeToScVal(BigInt(value), { type: 'u64' })
+  if (type === 'u64') return nativeToScVal(BigInt(Number(value)), { type: 'u64' })
+  if (type === 'bool') return nativeToScVal(Boolean(value))
   return nativeToScVal(String(value), { type: 'string' })
+}
+
+/** Resolve the created contract id from a create-contract response. Throws a
+ *  clear, transaction-named error instead of a bare TypeError when the host
+ *  function returned no value (e.g. a constructor signature mismatch). */
+export function contractIdFromReturnValue(returnValue, txHash) {
+  if (!returnValue) {
+    throw new Error(`deploy of tx ${txHash} returned no contract address`)
+  }
+  return Address.fromScAddress(returnValue.address()).toString()
 }
 
 /** Submit a prepared tx and poll until it lands. Returns the final response. */
@@ -95,9 +125,7 @@ async function deploy({ wasm, configJson, order, types }) {
   // 3. Create the contract, invoking __constructor with the user's config.
   // The just-uploaded WASM can take a few seconds to be visible to the create
   // simulation, so retry on the transient "Wasm does not exist" error.
-  const constructorArgs = order.map((key) =>
-    toScVal(configJson[key], types[key], deployerPk),
-  )
+  const constructorArgs = order.map((key) => toScVal(configJson[key], types[key], deployerPk))
   let hash, response
   for (let i = 0; ; i++) {
     account = await getAccount()
@@ -125,9 +153,7 @@ async function deploy({ wasm, configJson, order, types }) {
   }
 
   // The created contract address is the return value of the host function.
-  const contractAddress = Address.fromScAddress(
-    response.returnValue.address(),
-  ).toString()
+  const contractAddress = contractIdFromReturnValue(response.returnValue, hash)
 
   return {
     contractId: contractAddress,
@@ -137,12 +163,33 @@ async function deploy({ wasm, configJson, order, types }) {
   }
 }
 
-const [, , wasmPath, configArg, orderArg, typesArg] = process.argv
-const wasm = await readFile(wasmPath)
-const result = await deploy({
-  wasm,
-  configJson: JSON.parse(configArg),
-  order: orderArg.split(','),
-  types: JSON.parse(typesArg),
-})
-console.log(JSON.stringify(result, null, 2))
+/** CLI entry point. `--help` prints usage and returns without any network access. */
+export async function main(argv = process.argv.slice(2)) {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    console.log(USAGE)
+    return
+  }
+  const [wasmPath, configArg, orderArg, typesArg] = argv
+  if (!wasmPath || !configArg || !orderArg || !typesArg) {
+    throw new Error(USAGE)
+  }
+  const wasm = await readFile(wasmPath)
+  const result = await deploy({
+    wasm,
+    configJson: JSON.parse(configArg),
+    order: orderArg.split(','),
+    types: JSON.parse(typesArg),
+  })
+  console.log(JSON.stringify(result, null, 2))
+}
+
+const invokedDirectly = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })
+}
