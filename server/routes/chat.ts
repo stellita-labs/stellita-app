@@ -17,6 +17,10 @@ const router = Router()
  *   1. Rate-limit via consume_prompt RPC (atomic, server-side)
  *   2. Resolve model from the models table (adminClient — public ref data)
  *   3. Guardrail check (+ a `guardrail` usage_event — the classifier is a real LLM call)
+ *   1. Resolve model from the models table (adminClient — public ref data)
+ *   2. Guardrail check — BEFORE consuming a credit, so a blocked prompt never
+ *      burns one from the user's daily allowance
+ *   3. Rate-limit via consume_prompt RPC (atomic, server-side)
  *   4. Stream LLM output as text/plain (client parses live JSON)
  *   5. After stream finishes: persist user msg, assistant msg, version (if
  *      files changed), and a usage_event — all without blocking the stream,
@@ -47,6 +51,7 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
   // unknown or disabled tier must be rejected up front: otherwise a credit is
   // billed, a different model runs than the client asked for, and usage_events
   // records a model_type that does not exist in the models table.
+  // ── 1. Resolve model ───────────────────────────────────────────────────────
   const admin = adminClient()
   interface ModelRow {
     model_type: string
@@ -105,7 +110,7 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     return
   }
 
-  // ── 3. Guardrail ───────────────────────────────────────────────────────────
+  // ── 2. Guardrail ───────────────────────────────────────────────────────────
   const guardrail = await checkGuardrail({
     apiKey,
     model: providerModel,
@@ -159,6 +164,19 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
       .single()
 
     res.json({ blocked: true, message: blockedMsg })
+    return
+  }
+
+  // ── 3. Rate limit ──────────────────────────────────────────────────────────
+  const { data: allowed, error: rpcErr } = await req.supabase.rpc('consume_prompt', {
+    p_user: req.user.id,
+  })
+  if (rpcErr) {
+    errorResponse(res, 500, 'Failed to verify account prompt quota', rpcErr, { route: 'POST /api/projects/:id/chat' })
+    return
+  }
+  if (allowed === false) {
+    res.status(429).json({ error: 'rate_limited' })
     return
   }
 
