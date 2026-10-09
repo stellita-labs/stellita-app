@@ -15,7 +15,7 @@
     "check:env": "tsx scripts/check-env-example.ts",
     "check:forbidden-patterns": "tsx scripts/check-forbidden-patterns.ts",
     "typecheck": "tsc -b && tsc -p server/tsconfig.json --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
     "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/clone-project-visibility.test.ts",
     "test": "tsx --test tests/profile-credit-counters.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts tests/server-error-response.test.ts server/_lib/deploy.test.ts",

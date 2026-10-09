@@ -27,6 +27,8 @@ jobs:
       run: pnpm check:bundle
     - name: Check forbidden patterns
       run: pnpm check:forbidden-patterns
+    - name: Lint (zero warnings)
+      run: pnpm lint
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 15
