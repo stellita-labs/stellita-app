@@ -14,7 +14,7 @@ import type { Activity } from '../lib/api'
 import { parseActivity, parseStreamingMessage } from '../lib/api'
 import { applyFileOps, initialFileTree, injectDappPlumbing } from '../lib/project'
 import { buildContractsFile, CONTRACTS_FILE } from '../lib/contracts'
-import { api, streamChat, RateLimitError } from '../lib/backend'
+import { api, streamChat, RateLimitError, StreamTimeoutError } from '../lib/backend'
 import type { AgentAction } from '../../shared/types'
 import { useAuth } from '../auth/store'
 
@@ -92,6 +92,8 @@ interface ProjectsContextValue {
   /** Delete a project (and its versions/messages/contracts). */
   deleteProject: (slug: string) => Promise<void>
   send: (slug: string, text: string, opts?: { kind?: 'system' }) => void
+  /** Abort the in-flight chat for a project (composer Stop button). */
+  stop: (slug: string) => void
   /** Load a checkpoint's files non-destructively (keeps all versions). */
   openVersion: (slug: string, versionId: string) => void
   /** Restore to a checkpoint AND discard everything after it (destructive). */
@@ -200,6 +202,9 @@ type BackendProject = {
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth()
   const ref = useRef<Record<string, ProjectState>>({})
+  // One AbortController per in-flight chat so the composer's Stop button can
+  // cancel the active request (and its body read loop).
+  const controllers = useRef<Record<string, AbortController>>({})
   // `ref` holds the latest map for synchronous async reads; `snapshot` mirrors
   // it for rendering so we never read a ref during render.
   const [snapshot, setSnapshot] = useState<Record<string, ProjectState>>({})
@@ -357,11 +362,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       streamingMessage: '',
       updatedAt: startedAt,
     })
-    try {
-      let accumulated = ''
+    const controller = new AbortController()
+    controllers.current[slug] = controller
+    let accumulated = ''
 
+    try {
       if (p.id) {
-        // Backend streaming path
+        // Backend streaming path (abortable via the composer Stop button).
         await streamChat(
           p.id,
           { userMessage: text, history, fileTree: p.fileTree },
@@ -372,6 +379,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
               streamingMessage: parseStreamingMessage(accumulated),
             })
           },
+          { signal: controller.signal },
         )
 
         const parsed = parseFirstJsonObject(accumulated) as
@@ -474,13 +482,40 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         })
       }
     } catch (err) {
+      const latest = ref.current[slug]
+
+      // The user pressed Stop (AbortError) or the idle watchdog fired
+      // (StreamTimeoutError): return to an editable composer and keep whatever
+      // text already streamed as an assistant message.
+      const isTimeout = err instanceof StreamTimeoutError
+      const isAbort =
+        isTimeout ||
+        (typeof err === 'object' &&
+          err !== null &&
+          (err as { name?: string }).name === 'AbortError')
+
+      if (isAbort) {
+        const partial = accumulated.trim()
+        patch(slug, {
+          busy: false,
+          activity: [],
+          streamingMessage: '',
+          error: isTimeout
+            ? 'The response stalled and was stopped. Please try again.'
+            : null,
+          messages: partial
+            ? [...latest.messages, { role: 'assistant', content: partial, createdAt: now() }]
+            : latest.messages,
+        })
+        return
+      }
+
       const isRateLimit = err instanceof RateLimitError
       const errorMsg = isRateLimit
         ? 'Daily limit reached. Try again tomorrow.'
         : err instanceof Error
           ? err.message
           : 'Something went wrong'
-      const latest = ref.current[slug]
       const errorAssistantMsg: ChatMessage = {
         role: 'assistant',
         content: errorMsg,
@@ -495,7 +530,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           ? [...latest.messages, errorAssistantMsg]
           : latest.messages,
       })
+    } finally {
+      delete controllers.current[slug]
     }
+  }
+
+  /** Abort the active chat request for a project (no-op when idle). */
+  const stop = (slug: string) => {
+    controllers.current[slug]?.abort()
   }
 
   const resolveMessageActions = (slug: string, messageIndex: number) => {
@@ -862,6 +904,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     openTemplate,
     deleteProject,
     send: (slug, text, opts) => void send(slug, text, opts),
+    stop,
     openVersion,
     restoreVersion,
     renameProject,

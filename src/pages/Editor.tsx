@@ -20,6 +20,7 @@ export function Editor() {
     ready,
     getProject,
     send,
+    stop,
     openVersion,
     restoreVersion,
     renameProject,
@@ -134,6 +135,7 @@ export function Editor() {
       streamingMessage={project.streamingMessage}
       filePaths={Object.keys(project.fileTree)}
       onSend={(text) => send(project.slug, text)}
+      onStop={() => stop(project.slug)}
       onRunActions={handleRunActions}
       onSkipActions={handleSkipActions}
       readOnly={project.readOnly}
