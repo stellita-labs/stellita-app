@@ -29,7 +29,8 @@ import type { Manifest, ManifestConfigField, DeployResult } from '../../shared/t
 const RPC_URL = 'https://soroban-testnet.stellar.org'
 const FRIENDBOT = 'https://friendbot.stellar.org'
 const PASSPHRASE = Networks.TESTNET
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+type Sleep = (ms: number) => Promise<void>
+const sleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /** The Soroban scval type a config field maps to (derived from its UI type). */
 function scTypeOf(field: ManifestConfigField): string {
@@ -64,6 +65,7 @@ async function submit(
   server: rpc.Server,
   tx: Parameters<rpc.Server['prepareTransaction']>[0],
   signer: Keypair,
+  sleepFn: Sleep,
 ) {
   const prepared = await server.prepareTransaction(tx)
   prepared.sign(signer)
@@ -73,7 +75,7 @@ async function submit(
   }
   let got = await server.getTransaction(sent.hash)
   for (let i = 0; got.status === 'NOT_FOUND' && i < 30; i++) {
-    await sleep(1000)
+    await sleepFn(1000)
     got = await server.getTransaction(sent.hash)
   }
   if (got.status !== 'SUCCESS') throw new Error(`tx ${sent.hash} ended ${got.status}`)
@@ -86,6 +88,16 @@ export interface DeployInput {
   /** The user's wallet secret — signs the deploy and becomes the owner. When
    *  omitted, a throwaway funded account is used (so deploys work pre-wallet). */
   deployerSecret?: string
+}
+
+/** Injectable seam for tests: swap the RPC server, Friendbot HTTP client, WASM
+ *  reader and sleep so the whole deploy flow runs against an in-memory fake with
+ *  no network. All default to the real production implementations. */
+export interface DeployDeps {
+  rpcServer?: rpc.Server
+  fetchImpl?: typeof fetch
+  readWasm?: (wasmPath: string) => Promise<Buffer>
+  sleep?: Sleep
 }
 
 /**
@@ -120,17 +132,21 @@ export function contractIdFromReturnValue(
   }
 }
 
-export async function deployContract({
-  manifest,
-  config,
-  deployerSecret,
-}: DeployInput): Promise<DeployResult & { deployer: string; wasmHash: string }> {
+export async function deployContract(
+  { manifest, config, deployerSecret }: DeployInput,
+  deps: DeployDeps = {},
+): Promise<DeployResult & { deployer: string; wasmHash: string }> {
   if (manifest.type !== 'deployable' || !manifest.wasmPath || !manifest.init) {
     throw new Error(`Manifest "${manifest.id}" is not a deployable contract`)
   }
 
-  const wasm = await readFile(resolve(process.cwd(), manifest.wasmPath))
-  const server = new rpc.Server(RPC_URL)
+  const readWasm =
+    deps.readWasm ?? ((wasmPath: string) => readFile(resolve(process.cwd(), wasmPath)))
+  const doFetch = deps.fetchImpl ?? fetch
+  const doSleep = deps.sleep ?? sleep
+
+  const wasm = await readWasm(manifest.wasmPath)
+  const server = deps.rpcServer ?? new rpc.Server(RPC_URL)
   const deployer = deployerSecret
     ? Keypair.fromSecret(deployerSecret)
     : Keypair.random()
@@ -148,7 +164,7 @@ export async function deployContract({
     }
   }
   if (!funded) {
-    const fb = await fetch(`${FRIENDBOT}?addr=${deployerPk}`)
+    const fb = await doFetch(`${FRIENDBOT}?addr=${deployerPk}`)
     if (!fb.ok && fb.status !== 400) throw new Error(`friendbot failed: ${fb.status}`)
   }
   const getAccount = async () => {
@@ -156,7 +172,7 @@ export async function deployContract({
       try {
         return await server.getAccount(deployerPk)
       } catch {
-        await sleep(1000)
+        await doSleep(1000)
       }
     }
     throw new Error('deployer account never became visible on RPC')
@@ -171,11 +187,11 @@ export async function deployContract({
     for (let i = 0; ; i++) {
       const tx = makeTx(await getAccount())
       try {
-        return await submit(server, tx, deployer)
+        return await submit(server, tx, deployer, doSleep)
       } catch (err) {
         const transient = /txBadSeq|txNoAccount|MissingValue/.test(String(err))
         if (!transient || i >= 15) throw err
-        await sleep(1000)
+        await doSleep(1000)
       }
     }
   }
