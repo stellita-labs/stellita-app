@@ -201,3 +201,22 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Probe testnet RPC and Friendbot
       run: pnpm check:network
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs:
+    - verify
+    - migrations
+    - security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Fail unless every required job succeeded
+      env:
+        NEEDS: ${{ toJSON(needs) }}
+      run: "set -euo pipefail\necho \"Dependency results:\"\necho \"$NEEDS\" | jq\
+        \ -r 'to_entries[] | \"  \\(.key): \\(.value.result)\"'\nfailed=\"$(echo \"\
+        $NEEDS\" | jq -r 'to_entries[] | select(.value.result != \"success\") | .key'\
+        \ | tr '\\n' ' ')\"\nif [ -n \"$failed\" ]; then\n  echo \"::error::These\
+        \ required jobs did not succeed: $failed\"\n  exit 1\nfi\necho \"All required\
+        \ jobs succeeded.\"\n"
