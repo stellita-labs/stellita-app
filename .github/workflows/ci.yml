@@ -1,4 +1,8 @@
 name: ci
+# Least privilege by default: the workflow token is read-only for every job.
+# Elevate per job (e.g. `pull-requests: write`) only where a job truly needs it.
+permissions:
+  contents: read
 on:
   push:
     branches:
