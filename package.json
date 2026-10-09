@@ -18,8 +18,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:migrations": "tsx --test tests/profile-credit-counters.test.ts tests/clone-project-visibility.test.ts",
-    "test": "tsx --test tests/profile-credit-counters.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts tests/server-error-response.test.ts server/_lib/deploy.test.ts",
-    "check:public": "tsx scripts/check-public-assets.ts"
+    "test": "tsx --test tests/profile-credit-counters.test.ts tests/project-error-helper.test.ts tests/shared-project-seo.test.ts tests/server-error-response.test.ts server/_lib/deploy.test.ts tests/commit-message.test.ts",
+    "check:public": "tsx scripts/check-public-assets.ts",
+    "check:commits": "tsx scripts/check-commits.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.1",
