@@ -59,3 +59,23 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Check env.example secrets
       run: pnpm check:env
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [verify, migrations, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Fail unless every required job succeeded
+      env:
+        NEEDS: ${{ toJSON(needs) }}
+      run: |
+        set -euo pipefail
+        echo "Dependency results:"
+        echo "$NEEDS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+        failed="$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success") | .key' | tr '\n' ' ')"
+        if [ -n "$failed" ]; then
+          echo "::error::These required jobs did not succeed: $failed"
+          exit 1
+        fi
+        echo "All required jobs succeeded."
