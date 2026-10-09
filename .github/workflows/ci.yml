@@ -4,6 +4,10 @@ on:
     branches:
     - main
   pull_request: null
+  # Weekly (Mon 06:00 UTC) so advisories against already-merged deps surface
+  # even when nothing is pushed.
+  schedule:
+  - cron: '0 6 * * 1'
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -59,3 +63,22 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Check env.example secrets
       run: pnpm check:env
+  audit:
+    runs-on: ubuntu-latest
+    # 10 min cap: needs a registry round-trip, but never the toolchain build.
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.21.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Audit production dependencies
+      # --prod keeps the dev-only toolchain (eslint, typescript, puppeteer-core)
+      # from failing the build; only high/critical prod advisories fail the job.
+      run: pnpm audit --audit-level high --prod
