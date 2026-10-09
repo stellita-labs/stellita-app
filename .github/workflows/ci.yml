@@ -230,3 +230,43 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Validate contract manifests
       run: pnpm check:manifests
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: "docker:\n  - 'Dockerfile'\n  - 'Dockerfile.*'\n  - 'nginx.web.conf'\n\
+          \  - 'package.json'\n  - 'pnpm-lock.yaml'\n  - 'tsconfig.json'\n  - 'tsconfig.app.json'\n\
+          \  - 'tsconfig.node.json'\n"
+  docker:
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - name: Build the API image (Dockerfile)
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./Dockerfile
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    - name: Build the web image (Dockerfile.web)
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./Dockerfile.web
+        push: false
+        build-args: 'VITE_API_BASE=https://api.stellita.app
+
+          '
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
