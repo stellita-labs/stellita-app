@@ -1,5 +1,6 @@
 import type { SandpackTheme } from '@codesandbox/sandpack-react'
 import type { FileOp, FileTree, DeployedContract } from '../../shared/types'
+import { SOROBAN_EVENT_HELPERS } from './soroban-events'
 
 /**
  * The user's generated app lives as an in-memory FileTree. Sandpack (classic
@@ -329,6 +330,7 @@ import freighterApi from '@stellar/freighter-api'
 export const RPC_URL = 'https://soroban-testnet.stellar.org'
 export const NETWORK_PASSPHRASE = Networks.TESTNET
 const server = new rpc.Server(RPC_URL)
+${SOROBAN_EVENT_HELPERS}
 
 /** Read a view method (no wallet). Uses a funded account just as a sim source. */
 export async function readContract(
@@ -382,23 +384,7 @@ export async function getOwnedNftIds(
   const candidates = new Set<number>()
   for (const ev of res.events ?? []) {
     try {
-      const val = scValToNative(ev.value as any)
-      const nums: unknown[] = []
-      // Mint event data is an object like { token_id: 0 }; transfers carry the id
-      // in the value or topics. Gather every plausible token id.
-      if (val && typeof val === 'object') {
-        for (const k of ['token_id', 'tokenId', 'id'])
-          if (k in (val as any)) nums.push((val as any)[k])
-      } else {
-        nums.push(val)
-      }
-      for (const t of ev.topic as any[]) {
-        try { nums.push(scValToNative(t)) } catch {}
-      }
-      for (const x of nums) {
-        const n = Number(x)
-        if (Number.isInteger(n) && n >= 0 && n < 100000) candidates.add(n)
-      }
+      for (const id of nftIdCandidates(ev)) candidates.add(id)
     } catch {}
   }
   const owned: number[] = []
@@ -435,23 +421,8 @@ export async function getTokenActivity(
   const out: Movement[] = []
   for (const ev of res.events ?? []) {
     try {
-      const topic = (ev.topic as any[]).map((t) => scValToNative(t))
-      const name = String(topic[0])
-      // Event data is a scalar i128 for transfer, but an object { amount } for mint.
-      const raw = scValToNative(ev.value as any)
-      const amountVal =
-        raw && typeof raw === 'object' && 'amount' in raw ? (raw as any).amount : raw
-      const amount = fromUnits(BigInt(amountVal), decimals)
-      const time = (ev as any).ledgerClosedAt ?? ''
-      const txHash = (ev as any).txHash ?? ''
-      if (name === 'transfer') {
-        const from = String(topic[1]); const to = String(topic[2])
-        if (from === user) out.push({ kind: 'out', counterparty: to, amount, time, txHash })
-        else if (to === user) out.push({ kind: 'in', counterparty: from, amount, time, txHash })
-      } else if (name === 'mint') {
-        const to = String(topic[1])
-        if (to === user) out.push({ kind: 'mint', counterparty: '', amount, time, txHash })
-      }
+      const movement = movementFromEvent(ev, user, decimals)
+      if (movement) out.push(movement)
     } catch {
       // skip events we can't decode
     }
@@ -494,11 +465,7 @@ export async function getSwapHistory(
     }
     return []
   }
-  const amountOf = (ev: any): bigint => {
-    const raw = scValToNative(ev.value)
-    const x = raw && typeof raw === 'object' && 'amount' in raw ? (raw as any).amount : raw
-    return BigInt(x)
-  }
+  const amountOf = (ev: any): bigint => BigInt(eventAmountValue(scValToNative(ev.value)))
   // role: 'out' = user sent it, 'in' = user received it.
   const legsOf = (events: any[]) => {
     const m = new Map<string, { amount: bigint; role: 'in' | 'out'; time: string }>()
