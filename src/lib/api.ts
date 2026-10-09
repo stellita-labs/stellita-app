@@ -40,3 +40,22 @@ export function parseStreamingMessage(text: string): string {
   }
   return out
 }
+
+/**
+ * Terminal persistence sentinel emitted after the streamed agent JSON:
+ * `{"saved":true}` on success or `{"saved":false,"error":"save_failed"}` when
+ * the post-stream persistence failed. Returns null when no sentinel is present.
+ */
+export function parsePersistSentinel(text: string): { saved: boolean } | null {
+  const marker = text.lastIndexOf('"saved"')
+  if (marker < 0) return null
+  const start = text.lastIndexOf('{', marker)
+  const end = text.indexOf('}', marker)
+  if (start < 0 || end < 0) return null
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1)) as { saved?: unknown }
+    return typeof obj.saved === 'boolean' ? { saved: obj.saved } : null
+  } catch {
+    return null
+  }
+}

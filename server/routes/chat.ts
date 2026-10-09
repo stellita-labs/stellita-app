@@ -19,7 +19,9 @@ const router = Router()
  *   3. Guardrail check
  *   4. Stream LLM output as text/plain (client parses live JSON)
  *   5. After stream finishes: persist user msg, assistant msg, version (if
- *      files changed), and a usage_event — all without blocking the stream.
+ *      files changed), and a usage_event — all without blocking the stream,
+ *      then emit a terminal { saved } sentinel so the client can warn on a
+ *      persistence failure instead of silently losing the turn.
  */
 router.post('/projects/:id/chat', requireUser, async (req, res) => {
   const id = req.params['id'] as string
@@ -162,7 +164,9 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
 
   // ── 5. Persist (after stream, before end) ─────────────────────────────────
   // We fire persistence here — after the stream is done — so it doesn't delay
-  // the client. Errors are caught individually so one failure doesn't crash all.
+  // the client. A failure must not crash the response, but it must not be
+  // SILENT either: the client is told the turn was not saved.
+  let saved = true
   try {
     const [agentResponse, usageData] = await Promise.all([
       streamResult.object,
@@ -268,9 +272,17 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
       cost_usd: costUsd,
     })
   } catch (persistErr) {
-    // Persistence errors must not crash the response — log and continue.
-    console.error('[chat] persistence error:', persistErr)
+    // Persistence errors must not crash the response. Log the real error (with
+    // the project id) server-side; never leak it raw to the client.
+    saved = false
+    console.error(`[chat] persistence error for project ${id}:`, persistErr)
   }
+
+  // Terminal sentinel — the client reads the LAST line to learn whether the turn
+  // was persisted. `error` is a stable code, never the raw error text.
+  res.write(
+    '\n' + JSON.stringify(saved ? { saved: true } : { saved: false, error: 'save_failed' }) + '\n',
+  )
 
   res.end()
 })
