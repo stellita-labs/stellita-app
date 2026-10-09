@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { StrKey } from '@stellar/stellar-sdk'
 import { requireUser } from '../middleware/auth.js'
 import { listManifests, getManifest } from '../_lib/contracts.js'
 import { deployContract } from '../_lib/deploy.js'
@@ -78,13 +79,97 @@ router.post('/projects/:id/deploy', requireUser, async (req, res) => {
 // Faucet
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The minting helpers the faucet/NFT routes call. Injectable so the request
+ *  handling (validation, secret gating, error mapping) is unit-testable without
+ *  the Stellar RPC. */
+export interface MintFns {
+  mintDemoTokens: (
+    to: string,
+    amount: number | undefined,
+    secret: string | undefined,
+  ) => Promise<string>
+  mintNft: (
+    to: string,
+    secret: string | undefined,
+  ) => Promise<{ hash: string; tokenId: number | null }>
+}
+
+const defaultMintFns: MintFns = { mintDemoTokens, mintNft }
+
+/** A Stellar account (G…) or contract (C…) address. Anything else never reaches
+ *  the minting helper — a malformed address would otherwise throw deep in the SDK. */
+export function isValidStellarAddress(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false
+  return StrKey.isValidEd25519PublicKey(value) || StrKey.isValidContract(value)
+}
+
+/** The route-facing outcome: either a body to send as-is, or an error to hand to
+ *  errorResponse (which sanitizes it + attaches a correlation id). */
+export type MintOutcome =
+  | { kind: 'json'; status: number; body: Record<string, unknown> }
+  | { kind: 'error'; status: number; message: string; error: unknown }
+
+const NOT_CONFIGURED = 'Faucet is not configured'
+
+/** Validate + mint demo tokens. Pure of HTTP so it can be unit-tested directly. */
+export async function handleFaucetRequest(
+  body: { address?: string; amount?: number },
+  secret: string | undefined,
+  mints: MintFns = defaultMintFns,
+): Promise<MintOutcome> {
+  const { address, amount } = body
+  if (!address) {
+    return { kind: 'json', status: 400, body: { error: 'address required' } }
+  }
+  if (!isValidStellarAddress(address)) {
+    return { kind: 'json', status: 400, body: { error: 'invalid Stellar address' } }
+  }
+  if (!secret) {
+    return { kind: 'json', status: 503, body: { error: NOT_CONFIGURED } }
+  }
+  try {
+    const hash = await mints.mintDemoTokens(address, amount, secret)
+    return { kind: 'json', status: 200, body: { hash, tokenId: DEMO_TOKEN_ID } }
+  } catch (error) {
+    return { kind: 'error', status: 502, message: 'Failed to mint demo tokens', error }
+  }
+}
+
+/** Validate + mint a demo NFT. */
+export async function handleMintNftRequest(
+  body: { address?: string },
+  secret: string | undefined,
+  mints: MintFns = defaultMintFns,
+): Promise<MintOutcome> {
+  const { address } = body
+  if (!address) {
+    return { kind: 'json', status: 400, body: { error: 'address required' } }
+  }
+  if (!isValidStellarAddress(address)) {
+    return { kind: 'json', status: 400, body: { error: 'invalid Stellar address' } }
+  }
+  if (!secret) {
+    return { kind: 'json', status: 503, body: { error: NOT_CONFIGURED } }
+  }
+  try {
+    const result = await mints.mintNft(address, secret)
+    return { kind: 'json', status: 200, body: { ...result, nftId: DEMO_NFT_ID } }
+  } catch (error) {
+    return { kind: 'error', status: 502, message: 'Failed to mint demo NFT', error }
+  }
+}
+
 /** POST /api/faucet — mint demo tokens to the caller's address */
 router.post('/faucet', requireUser, async (req, res) => {
   const { address, amount } = req.body as { address?: string; amount?: number }
-  if (!address) { res.status(400).json({ error: 'address required' }); return }
-
-  const hash = await mintDemoTokens(address, amount, process.env.FAUCET_SECRET)
-  res.json({ hash, tokenId: DEMO_TOKEN_ID })
+  const outcome = await handleFaucetRequest({ address, amount }, process.env.FAUCET_SECRET)
+  if (outcome.kind === 'error') {
+    errorResponse(res, outcome.status, outcome.message, outcome.error, {
+      route: 'POST /api/faucet',
+    })
+    return
+  }
+  res.status(outcome.status).json(outcome.body)
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,10 +179,14 @@ router.post('/faucet', requireUser, async (req, res) => {
 /** POST /api/mint-nft — mint a demo NFT to the caller's address */
 router.post('/mint-nft', requireUser, async (req, res) => {
   const { address } = req.body as { address?: string }
-  if (!address) { res.status(400).json({ error: 'address required' }); return }
-
-  const result = await mintNft(address, process.env.FAUCET_SECRET)
-  res.json({ ...result, nftId: DEMO_NFT_ID })
+  const outcome = await handleMintNftRequest({ address }, process.env.FAUCET_SECRET)
+  if (outcome.kind === 'error') {
+    errorResponse(res, outcome.status, outcome.message, outcome.error, {
+      route: 'POST /api/mint-nft',
+    })
+    return
+  }
+  res.status(outcome.status).json(outcome.body)
 })
 
 export default router
