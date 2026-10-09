@@ -16,7 +16,7 @@ const router = Router()
  * Streaming chat endpoint. Flow:
  *   1. Rate-limit via consume_prompt RPC (atomic, server-side)
  *   2. Resolve model from the models table (adminClient — public ref data)
- *   3. Guardrail check
+ *   3. Guardrail check (+ a `guardrail` usage_event — the classifier is a real LLM call)
  *   4. Stream LLM output as text/plain (client parses live JSON)
  *   5. After stream finishes: persist user msg, assistant msg, version (if
  *      files changed), and a usage_event — all without blocking the stream.
@@ -92,6 +92,27 @@ router.post('/projects/:id/chat', requireUser, async (req, res) => {
     model: providerModel,
     userMessage,
     ongoing: (history?.length ?? 0) > 0,
+  })
+
+  // ── 3b. Account for the guardrail classifier's tokens ──────────────────────
+  // The guardrail is a full LLM call on EVERY prompt (allowed or blocked), so its
+  // tokens are real spend. Record a `guardrail` usage_event before responding so
+  // the Profile usage view is not under-reported by one call per prompt.
+  const guardrailInputTokens = guardrail.usage?.inputTokens ?? 0
+  const guardrailOutputTokens = guardrail.usage?.outputTokens ?? 0
+  const guardrailCostUsd =
+    (guardrailInputTokens / 1e6) * (modelRow?.input_usd_per_mtok ?? 0.75) +
+    (guardrailOutputTokens / 1e6) * (modelRow?.output_usd_per_mtok ?? 4.5)
+  await admin.from('usage_events').insert({
+    user_id: req.user.id,
+    project_id: id,
+    message_id: null,
+    kind: 'guardrail',
+    model_type: resolvedModelType,
+    provider_model: providerModel,
+    prompt_tokens: guardrailInputTokens,
+    completion_tokens: guardrailOutputTokens,
+    cost_usd: guardrailCostUsd,
   })
 
   if (!guardrail.allowed) {

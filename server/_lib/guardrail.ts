@@ -32,11 +32,18 @@ const guardrailSchema = z.object({
 
 export type GuardrailCategory = z.infer<typeof guardrailSchema>['category']
 
+export interface GuardrailUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
 export interface GuardrailResult {
   allowed: boolean
   category: GuardrailCategory
   reason: string
   refusal: string
+  /** Token usage of the classifier call (AI SDK v7: inputTokens/outputTokens). */
+  usage: GuardrailUsage
 }
 
 const SYSTEM = `You are a safety gate for Stellita — a tool that builds
@@ -81,7 +88,7 @@ export async function checkGuardrail({
 }): Promise<GuardrailResult> {
   try {
     const openai = createOpenAI({ apiKey })
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: openai(model),
       schema: guardrailSchema,
       maxRetries: 2,
@@ -92,13 +99,21 @@ export async function checkGuardrail({
           : ''),
       messages: [{ role: 'user', content: userMessage }],
     })
-    return { allowed: object.category === 'build_request', ...object }
+    return {
+      allowed: object.category === 'build_request',
+      ...object,
+      usage: {
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+      },
+    }
   } catch {
     return {
       allowed: true,
       category: 'build_request',
       reason: 'classifier unavailable',
       refusal: '',
+      usage: { inputTokens: 0, outputTokens: 0 },
     }
   }
 }
