@@ -26,8 +26,13 @@ import {
 } from '@stellar/stellar-sdk'
 import type { Manifest, ManifestConfigField, DeployResult } from '../../shared/types'
 
-const RPC_URL = 'https://soroban-testnet.stellar.org'
-const FRIENDBOT = 'https://friendbot.stellar.org'
+/** Soroban RPC endpoint — overridable via the same STELLAR_RPC_URL env var
+ *  the rest of the server uses (see env.example). Defaults to testnet. */
+export const RPC_URL =
+  process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org'
+/** Friendbot endpoint — overridable via FRIENDBOT_URL. Defaults to testnet. */
+export const FRIENDBOT =
+  process.env.FRIENDBOT_URL ?? 'https://friendbot.stellar.org'
 const PASSPHRASE = Networks.TESTNET
 type Sleep = (ms: number) => Promise<void>
 const sleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms))
