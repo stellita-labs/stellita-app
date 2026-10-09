@@ -59,3 +59,54 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Check env.example secrets
       run: pnpm check:env
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust with the Soroban wasm target
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32v1-none
+    - name: Cache cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-stellar-cli-25.2.0
+    - name: Install stellar-cli 25.2.0
+      run: |
+        if ! command -v stellar >/dev/null 2>&1; then
+          cargo install --locked stellar-cli --version 25.2.0
+        fi
+    - name: Rebuild the WASM catalog into a temp directory
+      run: OUT="$RUNNER_TEMP/wasm-rebuild" ./contracts/build.sh
+    - name: Compare rebuilt WASM with the committed WASM
+      run: |
+        set -euo pipefail
+        committed="contracts/wasm/SHA256SUMS"
+        rebuilt="$RUNNER_TEMP/wasm-rebuild/SHA256SUMS"
+        status=0
+        while read -r hash name; do
+          [ -n "$name" ] || continue
+          fresh="$(awk -v n="$name" '$2 == n { print $1 }' "$rebuilt")"
+          if [ -z "$fresh" ]; then
+            echo "::error::contracts/build.sh did not produce $name"
+            status=1
+          elif [ "$fresh" != "$hash" ]; then
+            echo "::error::$name: committed $hash != rebuilt $fresh"
+            status=1
+          else
+            echo "ok  $name  $hash"
+          fi
+        done < "$committed"
+        if [ "$status" -ne 0 ]; then
+          echo "--- committed ($committed) ---"
+          cat "$committed"
+          echo "--- rebuilt ($rebuilt) ---"
+          cat "$rebuilt"
+          exit 1
+        fi
+        echo "Committed WASM matches contracts/build.sh output."
