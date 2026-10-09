@@ -1,4 +1,9 @@
 name: ci
+concurrency:
+  # Unique per workflow+ref, so a different workflow never cancels this one.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded runs on branches/PRs, but never on main.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 on:
   push:
     branches:
