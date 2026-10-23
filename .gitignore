@@ -23,7 +23,6 @@ supabase/.temp/
 supabase/.branches/
 
 # Editor directories and files
-.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -35,3 +34,4 @@ supabase/.branches/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
