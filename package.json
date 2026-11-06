@@ -33,7 +33,7 @@
     "@ai-sdk/openai": "^4.0.84",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@stellar/freighter-api": "^6.0.1",
-    "@stellar/stellar-sdk": "^17.2.1",
+    "@stellar/stellar-sdk": "^17.4.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "ai": "^7.0.128",
@@ -47,7 +47,7 @@
     "react-dom": "^19.3.0",
     "react-resizable-panels": "^4.14.2",
     "react-router-dom": "^7.18.4",
-    "stellar-hd-wallet": "^1.0.2",
+    "stellar-hd-wallet": "^2.0.2",
     "vaul": "^1.1.2",
     "zod": "^4.4.3"
   },
